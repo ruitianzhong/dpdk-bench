@@ -10,8 +10,7 @@ struct nat_context
     NetworkTuple tuple;
 };
 
-
-// std::unordered_map<network_five_tuple, nat_context *> snat_map, dnat_map;
+std::unordered_map<NetworkTuple, nat_context *, TupleHasher> snat_map, dnat_map;
 // we do not use the reserved port here though
 constexpr int MIN_PORT_NUM = 1024;
 constexpr int MAX_PORT_NUM = 65535;

@@ -4,16 +4,16 @@ CXX := g++
 .PHONY: clean
 
 nat: nat_udp_v4 util
-	${CXX} ${CXXFLAGS} -o nat  nat_udp_v4.o packet.o
+	${CXX} ${CXXFLAGS} -o nat  nat_udp_v4.o packet.o -lpcap
 
 
 nat_udp_v4: nat_udp_v4.cpp
-	${CXX} -c ${CFLAGS} nat_udp_v4.cpp
+	${CXX} -c ${CXXFLAGS} nat_udp_v4.cpp
 
 
 util: util/packet.cpp util/common.hpp
-	${CXX} -c ${CFLAGS} util/packet.cpp
+	${CXX} -c ${CXXFLAGS} util/packet.cpp
 
 clean:
-	rm -f ./*.o util/*.o 
+	rm -f ./*.o util/*.o nat
 

@@ -22,9 +22,9 @@ class TupleHasher
 {
 
 public:
-    size_t operator()(const NetworkTuple & tuple)
+    size_t operator()(const NetworkTuple &tuple)
     {
-        size_t src_ip_low_16, dst_ip_low_16,src_port,dst_port;
+        size_t src_ip_low_16, dst_ip_low_16, src_port, dst_port;
         src_ip_low_16 = size_t(tuple.src_ip & ~(0xffff));
         dst_ip_low_16 = size_t(tuple.dst_ip & ~(0xffff));
         src_port = size_t(tuple.src_port);
@@ -33,9 +33,6 @@ public:
         return (src_ip_low_16) | (dst_ip_low_16 << 16) | (dst_port << 32) | (src_port << 48);
     }
 };
-
-
-
 
 /// Note: struct definition is obtained from xv6 src code
 #define ETHADDR_LEN 6
@@ -86,13 +83,15 @@ struct udp
 struct Packet
 {
     uint8_t *data;
-    uint64_t len;
+    size_t len;
     // ethernet layer
     struct eth *get_eth_hdr();
 
     struct ipv4 *get_ipv4_hdr();
 
     struct udp *get_udp_hdr();
+
+    Packet(uint8_t *_data, size_t _len) : data(_data), len(_len) {}
 };
 
 extern struct Packet **p;
@@ -111,12 +110,8 @@ public:
     explicit PacketsLoader(std::string &filepath);
 
     PacketsLoader(PacketsLoader &) = delete;
-
-    bool have_next();
+    // return nullptr if there is no more packet
+    Packet *get_next_packet();
 };
-
-
-
-
 
 #endif
