@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <arpa/inet.h>
 #include <string>
+#include <vector>
 
 // hash table key
 struct NetworkTuple
@@ -94,14 +95,10 @@ struct Packet
     Packet(uint8_t *_data, size_t _len) : data(_data), len(_len) {}
 };
 
-extern struct Packet **p;
-
-constexpr int MAX_PACKETS_NUM = 10000000;
-
 class PacketsLoader
 {
 private:
-    Packet *_packets[MAX_PACKETS_NUM];
+    std::vector<Packet *> _packets;
     uint64_t _total_packets;
     uint64_t _cur_idx;
     uint64_t _total_bytes_count;

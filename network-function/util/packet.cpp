@@ -40,7 +40,7 @@ PacketsLoader::PacketsLoader(std::string &&filepath)
     pcap_pkthdr pkthdr;
     const u_char *pkt = nullptr;
 
-    while ((pkt = pcap_next(p, &pkthdr)) != nullptr && _total_packets < MAX_PACKETS_NUM)
+    while ((pkt = pcap_next(p, &pkthdr)) != nullptr)
     {
         uint8_t *buf = (uint8_t *)malloc(pkthdr.len);
         if (!buf)
@@ -52,7 +52,8 @@ PacketsLoader::PacketsLoader(std::string &&filepath)
         std::memcpy(buf, pkt, pkthdr.len);
         Packet *packet = new Packet(buf, pkthdr.len);
         _total_bytes_count += pkthdr.len;
-        _packets[_total_packets++] = packet;
+        _packets.push_back(packet);
+        _total_packets++;
         // pkt may become invalid after pcap_next, according to man page
         // It's the callee's duty to free  pkt, not the caller
     }
