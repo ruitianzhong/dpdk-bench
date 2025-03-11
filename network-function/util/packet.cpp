@@ -4,7 +4,6 @@
 #include <string>
 #include <pcap/pcap.h>
 #include <iostream>
-#include <string>
 #include <cstring>
 
 // It just works
@@ -25,8 +24,8 @@ eth *Packet::get_eth_hdr()
     assert(len >= sizeof(eth));
     return (eth *)data;
 }
-
-PacketsLoader::PacketsLoader(std::string &filepath)
+// We use pcap because it's easy to read the packet through tools like Wireshark
+PacketsLoader::PacketsLoader(std::string &&filepath)
     : _cur_idx(0), _total_packets(0), _total_bytes_count(0)
 {
     const char *path = filepath.c_str();
@@ -39,15 +38,10 @@ PacketsLoader::PacketsLoader(std::string &filepath)
     }
 
     pcap_pkthdr pkthdr;
-    const u_char *pkt = pcap_next(p, &pkthdr);
+    const u_char *pkt = nullptr;
 
-    while (!pkt)
+    while (!(pkt = pcap_next(p, &pkthdr)))
     {
-        if (!pkt)
-        {
-            std::cout << "Read all packets" << std::endl;
-            break;
-        }
         std::cout << "header length: " << pkthdr.len << std::endl;
         uint8_t *buf = (uint8_t *)malloc(pkthdr.len);
         if (!buf)
@@ -65,8 +59,6 @@ PacketsLoader::PacketsLoader(std::string &filepath)
 
         // pkt may become invalid after pcap_next, according to man page
         // It's the callee's duty to free  pkt, not the caller
-        pkt = pcap_next(p, &pkthdr);
-
     }
     pcap_close(p);
 }

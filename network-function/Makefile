@@ -15,5 +15,5 @@ util: util/packet.cpp util/common.hpp
 	${CXX} -c ${CXXFLAGS} util/packet.cpp
 
 clean:
-	rm -f ./*.o util/*.o nat
+	rm -f ./*.o util/*.o nat ./scripts/*.pcap
 

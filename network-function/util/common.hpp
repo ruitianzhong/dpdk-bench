@@ -12,7 +12,7 @@ struct NetworkTuple
     uint16_t src_port;
     uint16_t dst_port;
     uint8_t proto;
-    bool operator==(const NetworkTuple &tuple)
+    bool operator==(const NetworkTuple &tuple) const
     {
         return (src_ip == tuple.src_ip && dst_ip == tuple.dst_ip && src_port == tuple.src_port && dst_port == tuple.dst_port);
     }
@@ -22,7 +22,7 @@ class TupleHasher
 {
 
 public:
-    size_t operator()(const NetworkTuple &tuple)
+    size_t operator()(const NetworkTuple &tuple) const
     {
         size_t src_ip_low_16, dst_ip_low_16, src_port, dst_port;
         src_ip_low_16 = size_t(tuple.src_ip & ~(0xffff));
@@ -64,9 +64,9 @@ struct ipv4
 #define NF_IPPROTO_TCP 6  // Transmission control protocol
 #define NF_IPPROTO_UDP 17 // User datagram protocol
 
-#define MAKE_IP_ADDR(a, b, c, d)             \
-    (((uint32)a << 24) | ((uint32)b << 16) | \
-     ((uint32)c << 8) | (uint32)d)
+#define MAKE_IP_ADDR(a, b, c, d)                 \
+    (((uint32_t)a << 24) | ((uint32_t)b << 16) | \
+     ((uint32_t)c << 8) | (uint32_t)d)
 
 // a UDP packet header (comes after an IP header).
 
@@ -107,7 +107,7 @@ private:
     uint64_t _total_bytes_count;
     /* data */
 public:
-    explicit PacketsLoader(std::string &filepath);
+    explicit PacketsLoader(std::string &&filepath);
 
     PacketsLoader(PacketsLoader &) = delete;
     // return nullptr if there is no more packet
