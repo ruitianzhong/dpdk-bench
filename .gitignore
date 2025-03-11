@@ -1,4 +1,5 @@
 .vscode
-*/*.o
+*.o
 nat
 network-function/scripts/.idea
+*.pcap

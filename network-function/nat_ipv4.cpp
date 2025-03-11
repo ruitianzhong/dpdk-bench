@@ -29,6 +29,15 @@ std::unordered_map<NetworkTuple, DNATContext *, TupleHasher> dnat_map;
 constexpr uint16_t MIN_PORT_NUM = 1024;
 constexpr uint16_t MAX_PORT_NUM = 65535;
 uint16_t current_port = MIN_PORT_NUM;
+void print_address_info(ipv4 *ip_p, udp *udp_p)
+{
+    in_addr src, dst;
+    src.s_addr = ip_p->ip_src;
+    dst.s_addr = ip_p->ip_dst;
+    std::cout << "src ip " << inet_ntoa(src) << " port:" << ntohs(udp_p->sport) << std::endl;
+    std::cout << "dst ip " << inet_ntoa(dst) << " port:" << ntohs(udp_p->dport) << std::endl;
+    std::cout << std::endl;
+}
 
 void process_packet(Packet *packet)
 {
@@ -46,7 +55,9 @@ void process_packet(Packet *packet)
     udp *udp_p = packet->get_udp_hdr();
     ipv4 *ip_p = packet->get_ipv4_hdr();
     eth *eth_p = packet->get_eth_hdr();
-
+#ifdef NF_DEBUG
+    print_address_info(ip_p, udp_p);
+#endif
     NetworkTuple tu;
     // network order
     tu.src_ip = ntohl(ip_p->ip_src);
@@ -97,7 +108,12 @@ void process_packet(Packet *packet)
     memcpy(ethaddr, eth_p->shost, ETHADDR_LEN);
     memcpy(eth_p->shost, eth_p->dhost, ETHADDR_LEN);
     memcpy(eth_p->dhost, ethaddr, ETHADDR_LEN);
+
+#ifdef NF_DEBUG
+    print_address_info(ip_p, udp_p);
+#endif
 }
+
 // TODO: Free all allocated resource
 void teardown()
 {
@@ -119,17 +135,16 @@ int main(int argc, char const *argv[])
     if (argc < 2)
     {
         std::cout << "Usage: ./nat <pcap file path>" << std::endl;
+        exit(EXIT_FAILURE);
     }
     struct timeval start_time, end_time;
     uint64_t total_us = 0;
+    // load the data before processing
+    PacketsLoader pl = PacketsLoader(std::string(argv[1]));
 
     std::cout << "NAT processing start" << std::endl;
     gettimeofday(&start_time, NULL);
-    int x = 0;
     // the killer microsecond
-    std::cout << "The killer microsecond" << std::endl;
-
-    PacketsLoader pl = PacketsLoader(std::string(argv[1]));
     Packet *p = nullptr;
     while ((p = pl.get_next_packet()) != nullptr)
     {
@@ -137,7 +152,7 @@ int main(int argc, char const *argv[])
     }
 
     gettimeofday(&end_time, NULL);
-    std::cout << "NAT processing end";
+    std::cout << "NAT processing end" << std::endl;
 
     total_us = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
 

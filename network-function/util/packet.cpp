@@ -33,39 +33,37 @@ PacketsLoader::PacketsLoader(std::string &&filepath)
     pcap_t *p = pcap_open_offline(path, ebuf);
     if (!p)
     {
-        std::string s = "pcap_open_offline " + std::string(ebuf);
-        throw s;
+        std::cout << "pcap_open_offline failed. Reason: " + std::string(ebuf) << std::endl;
+        exit(EXIT_FAILURE);
     }
 
     pcap_pkthdr pkthdr;
     const u_char *pkt = nullptr;
 
-    while (!(pkt = pcap_next(p, &pkthdr)))
+    while ((pkt = pcap_next(p, &pkthdr)) != nullptr && _total_packets < MAX_PACKETS_NUM)
     {
-        std::cout << "header length: " << pkthdr.len << std::endl;
         uint8_t *buf = (uint8_t *)malloc(pkthdr.len);
         if (!buf)
         {
-
             std::cout << "failed to allocate function @" << __func__ << std::endl;
-            throw "failed to load data";
+            exit(EXIT_FAILURE);
         }
 
         std::memcpy(buf, pkt, pkthdr.len);
         Packet *packet = new Packet(buf, pkthdr.len);
         _total_bytes_count += pkthdr.len;
         _packets[_total_packets++] = packet;
-        _total_packets += 1;
-
         // pkt may become invalid after pcap_next, according to man page
         // It's the callee's duty to free  pkt, not the caller
     }
     pcap_close(p);
+    std::cout << "Total packets: " << _total_packets << " total bytes: " << _total_bytes_count << std::endl;
 }
 
 Packet *PacketsLoader::get_next_packet()
 {
-    if(_cur_idx < _total_packets){
+    if (_cur_idx < _total_packets)
+    {
         return this->_packets[_cur_idx++];
     }
     return nullptr;

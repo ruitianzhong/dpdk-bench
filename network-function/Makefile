@@ -1,4 +1,4 @@
-CXXFLAGS := -g -O3
+CXXFLAGS := -g -O3 -Werror
 CXX := g++
 
 .PHONY: clean

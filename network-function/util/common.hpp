@@ -96,7 +96,7 @@ struct Packet
 
 extern struct Packet **p;
 
-constexpr int MAX_PACKETS_NUM = 8 * 1000;
+constexpr int MAX_PACKETS_NUM = 1000000;
 
 class PacketsLoader
 {
@@ -113,5 +113,5 @@ public:
     // return nullptr if there is no more packet
     Packet *get_next_packet();
 };
-
+// #define NF_DEBUG
 #endif
