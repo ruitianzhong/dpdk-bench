@@ -4,11 +4,11 @@ CXX := g++
 .PHONY: clean
 
 nat: nat_udp_v4 util
-	${CXX} ${CXXFLAGS} -o nat  nat_udp_v4.o packet.o -lpcap
+	${CXX} ${CXXFLAGS} -o nat  nat_ipv4.o packet.o -lpcap
 
 
-nat_udp_v4: nat_udp_v4.cpp
-	${CXX} -c ${CXXFLAGS} nat_udp_v4.cpp
+nat_udp_v4: nat_ipv4.cpp
+	${CXX} -c ${CXXFLAGS} nat_ipv4.cpp
 
 
 util: util/packet.cpp util/common.hpp
