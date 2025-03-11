@@ -96,7 +96,7 @@ struct Packet
 
 extern struct Packet **p;
 
-constexpr int MAX_PACKETS_NUM = 1000000;
+constexpr int MAX_PACKETS_NUM = 10000000;
 
 class PacketsLoader
 {

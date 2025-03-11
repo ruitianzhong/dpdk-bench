@@ -26,24 +26,22 @@ def generate_packets(args):
         dst_ip = generate_random_ip()
         src_port = random.randint(1024, 65536)
         dst_port = random.randint(1024, 65536)
-
-        flows_list.append((src_ip, dst_ip, src_port, dst_port))
+        eth = Ether(src=SRC_MAC, dst=DST_MAC)
+        ip = IP(src=src_ip, dst=dst_ip)
+        udp = UDP(sport=src_port, dport=dst_port)
+        http = HTTP()
+        httpreq = HTTPRequest()
+        # It may not be realistic for HTTP over UDP, but it's a synthetic test and
+        # we use it anyway.
+        pkt = eth / ip / udp / http / httpreq
+        flows_list.append((src_ip, dst_ip, src_port, dst_port, pkt))
 
     for group_idx in range(args.slf_group_count):
         for flow_idx in range(args.flow_num):
-            src_ip, dst_ip, src_port, dst_port = flows_list[flow_idx]
-
+            # src_ip, dst_ip, src_port, dst_port = flows_list[flow_idx]
             for i in range(args.slf):
                 # pkt_size = random.randint(200, 300)
-                eth = Ether(src=SRC_MAC, dst=DST_MAC)
-                ip = IP(src=src_ip, dst=dst_ip)
-                udp = UDP(sport=src_port, dport=dst_port)
-                http = HTTP()
-                httpreq = HTTPRequest()
-                # It may not be realistic for HTTP over UDP, but it's a synthetic test and
-                # we use it anyway.
-                pkt = eth / ip / udp / http / httpreq
-                pkt_list.append(pkt)
+                pkt_list.append(flows_list[flow_idx][4])
     return pkt_list
 
 

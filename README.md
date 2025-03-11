@@ -2,6 +2,14 @@
 
 This repository is for artifact evaluation(i.e., 软硬件验收 in Chinese) of final year project(FYP) in Xidian University.
 
+## Install Dependencies
+
+```bash
+pip install scapy
+sudo apt-get install libpcap-dev
+```
+
+
 ## Notes
 
 Run app on specific core
