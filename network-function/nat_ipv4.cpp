@@ -29,6 +29,7 @@ std::unordered_map<NetworkTuple, DNATContext *, TupleHasher> dnat_map;
 // we do not release the port for now
 constexpr uint16_t MIN_PORT_NUM = 1024;
 constexpr uint16_t MAX_PORT_NUM = 65535;
+static int miss_cnt = 0;
 uint16_t current_port = MIN_PORT_NUM;
 void print_address_info(ipv4 *ip_p, udp *udp_p)
 {
@@ -96,6 +97,7 @@ void process_packet(Packet *packet)
         dnat_map[reverse_tuple] = dctx;
         // reduce the number of hash table search
         ctx = sctx;
+        miss_cnt++;
     }
     else
     {
@@ -117,6 +119,7 @@ void process_packet(Packet *packet)
     // for  loop processing(just to be memory efficient)
     ip_p->ip_src = htonl(tu.src_ip);
     udp_p->sport = htons(tu.src_port);
+    ctx->count++; // update per packet state
 }
 
 // TODO: Free all allocated resource
@@ -154,7 +157,7 @@ int main(int argc, char const *argv[])
     uint64_t total_us = 0;
     // load the data before processing
     PacketsLoader pl = PacketsLoader(std::string(argv[1]), 5000);
-
+    uint64_t cnt = 0;
     std::cout << "NAT processing start" << std::endl;
     gettimeofday(&start_time, NULL);
     // the killer microsecond
@@ -162,6 +165,7 @@ int main(int argc, char const *argv[])
     while ((p = pl.get_next_packet()) != nullptr)
     {
         process_packet(p);
+        cnt++;
     }
 
     gettimeofday(&end_time, NULL);
@@ -171,6 +175,7 @@ int main(int argc, char const *argv[])
 
     std::cout << "Total time is " << total_us << std::endl;
     std::cout << "Average time per packet: " << double(total_us) / double(pl.get_total_packets()) << std::endl;
+    std::cout << "Total Packest handled: " << cnt << " miss " << miss_cnt << std::endl;
     teardown();
     return 0;
 }

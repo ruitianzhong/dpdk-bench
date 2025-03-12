@@ -7,6 +7,11 @@ This repository is for artifact evaluation(i.e., 软硬件验收 in Chinese) of 
 ```bash
 pip install scapy
 sudo apt-get install libpcap-dev
+cat /proc/sys/kernel/perf_event_paranoid
+echo -1 >> /proc/sys/kernel/perf_event_paranoid
+# disable turbo boost
+cat /sys/devices/system/cpu/intel_pstate/no_turbo
+echo "1" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
 ```
 
 ## Notes
