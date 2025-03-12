@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <cassert>
+#include <x86intrin.h>
 
 struct SNATContext
 {
@@ -66,7 +67,9 @@ void process_packet(Packet *packet)
     tu.src_port = ntohs(udp_p->sport);
     SNATContext *ctx = nullptr;
     // Miss
-    if (snat_map.find(tu) == snat_map.end())
+    auto iter = snat_map.find(tu);
+
+    if (iter == snat_map.end())
     {
         if (current_port == MAX_PORT_NUM)
         {
@@ -94,10 +97,9 @@ void process_packet(Packet *packet)
         // reduce the number of hash table search
         ctx = sctx;
     }
-
-    if (!ctx)
+    else
     {
-        ctx = snat_map[tu];
+        ctx = iter->second;
     }
 
     ip_p->ip_src = htonl(ctx->src_ip);
@@ -112,6 +114,9 @@ void process_packet(Packet *packet)
 #ifdef NF_DEBUG
     print_address_info(ip_p, udp_p);
 #endif
+    // for  loop processing(just to be memory efficient)
+    ip_p->ip_src = htonl(tu.src_ip);
+    udp_p->sport = htons(tu.src_port);
 }
 
 // TODO: Free all allocated resource
@@ -130,6 +135,14 @@ void teardown()
     }
 }
 
+__inline__ uint64_t perf_counter(void)
+{
+    __asm__ __volatile__("" ::: "memory");
+    uint64_t r = __rdtsc();
+    __asm__ __volatile__("" ::: "memory");
+    return r;
+}
+
 int main(int argc, char const *argv[])
 {
     if (argc < 2)
@@ -140,7 +153,7 @@ int main(int argc, char const *argv[])
     struct timeval start_time, end_time;
     uint64_t total_us = 0;
     // load the data before processing
-    PacketsLoader pl = PacketsLoader(std::string(argv[1]));
+    PacketsLoader pl = PacketsLoader(std::string(argv[1]), 2000);
 
     std::cout << "NAT processing start" << std::endl;
     gettimeofday(&start_time, NULL);
@@ -157,6 +170,7 @@ int main(int argc, char const *argv[])
     total_us = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
 
     std::cout << "Total time is " << total_us << std::endl;
+    std::cout << "Average time per packet: " << double(total_us) / double(pl.get_total_packets()) << std::endl;
     teardown();
     return 0;
 }

@@ -9,7 +9,6 @@ pip install scapy
 sudo apt-get install libpcap-dev
 ```
 
-
 ## Notes
 
 Run app on specific core

@@ -102,13 +102,21 @@ private:
     uint64_t _total_packets;
     uint64_t _cur_idx;
     uint64_t _total_bytes_count;
+    uint64_t _prev;
+    uint64_t _loop_back_time;
+    uint64_t _current_epoch;
     /* data */
 public:
-    explicit PacketsLoader(std::string &&filepath);
+    explicit PacketsLoader(std::string &&filepath, uint64_t loop_back_time = 1);
 
     PacketsLoader(PacketsLoader &) = delete;
     // return nullptr if there is no more packet
     Packet *get_next_packet();
+
+    uint64_t get_total_packets() const
+    {
+        return _total_packets * _loop_back_time;
+    }
 };
 // #define NF_DEBUG
 #endif

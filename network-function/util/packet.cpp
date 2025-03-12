@@ -25,8 +25,8 @@ eth *Packet::get_eth_hdr()
     return (eth *)data;
 }
 // We use pcap because it's easy to read the packet through tools like Wireshark
-PacketsLoader::PacketsLoader(std::string &&filepath)
-    : _cur_idx(0), _total_packets(0), _total_bytes_count(0)
+PacketsLoader::PacketsLoader(std::string &&filepath, uint64_t loop_back_time)
+    : _cur_idx(0), _total_packets(0), _total_bytes_count(0), _loop_back_time(loop_back_time), _current_epoch(0)
 {
     const char *path = filepath.c_str();
     char ebuf[PCAP_ERRBUF_SIZE];
@@ -58,14 +58,21 @@ PacketsLoader::PacketsLoader(std::string &&filepath)
         // It's the callee's duty to free  pkt, not the caller
     }
     pcap_close(p);
-    std::cout << "Total packets: " << _total_packets << " total bytes: " << _total_bytes_count << std::endl;
+    std::cout << "Total real packets: " << _total_packets << " total bytes: " << _total_bytes_count << std::endl;
 }
 
 Packet *PacketsLoader::get_next_packet()
 {
-    if (_cur_idx < _total_packets)
+    if (_current_epoch == _loop_back_time)
     {
-        return this->_packets[_cur_idx++];
+        return nullptr;
     }
-    return nullptr;
+    Packet *p = _packets[_cur_idx];
+    _cur_idx += 1;
+    if (_cur_idx == _total_packets)
+    {
+        _cur_idx = 0;
+        _current_epoch += 1;
+    }
+    return p;
 }

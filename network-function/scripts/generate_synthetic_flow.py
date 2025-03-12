@@ -17,15 +17,62 @@ def generate_random_ip():
         random.randint(1, 255)) + "." + str(
         random.randint(1, 255))
 
+# Not used for now
+class Packet:
+    def __init__(self, args):
+        self.slf = args.slf
+        self.flow_num = args.flow_num
+        self.slf_group_count = args.slf_group_count
+        self.flows_list = [None] * args.flow_num
+        self.length = self.slf * self.flow_num * self.slf_group_count
+        for flow_idx in range(args.flow_num):
+            src_ip = generate_random_ip()
+            dst_ip = generate_random_ip()
+            src_port = random.randint(1024, 65535)
+            dst_port = random.randint(1024, 65535)
+            eth = Ether(src=SRC_MAC, dst=DST_MAC)
+            ip = IP(src=src_ip, dst=dst_ip)
+            udp = UDP(sport=src_port, dport=dst_port)
+            http = HTTP()
+            httpreq = HTTPRequest()
+            # It may not be realistic for HTTP over UDP, but it's a synthetic test and
+            # we use it anyway.
+            pkt = eth / ip / udp / http / httpreq
+            self.flows_list[flow_idx] = pkt
+
+    def __len__(self):
+        print(self.slf * self.flow_num * self.slf_group_count)
+        return self.length
+
+    def __iter__(self):
+        self.current_flow = 0
+        self.cnt = 0
+        return self
+
+    def __next__(self):
+
+        if self.cnt == self.length:
+            raise StopIteration
+
+        f = self.current_flow
+
+        self.cnt += 1
+        if self.cnt % self.slf == 0:
+            self.current_flow = (self.current_flow+1) % self.flow_num
+        # print("next")
+        return self.flows_list[f]
+
 
 def generate_packets(args):
-    pkt_list = []
-    flows_list = []
+    cnt = 0
+    total_size = args.flow_num * args.slf_group_count * args.slf
+    pkt_list = [None] * total_size
+    flows_list = [None] * args.flow_num
     for flow_idx in range(args.flow_num):
         src_ip = generate_random_ip()
         dst_ip = generate_random_ip()
-        src_port = random.randint(1024, 65536)
-        dst_port = random.randint(1024, 65536)
+        src_port = random.randint(1024, 65535)
+        dst_port = random.randint(1024, 65535)
         eth = Ether(src=SRC_MAC, dst=DST_MAC)
         ip = IP(src=src_ip, dst=dst_ip)
         udp = UDP(sport=src_port, dport=dst_port)
@@ -34,14 +81,16 @@ def generate_packets(args):
         # It may not be realistic for HTTP over UDP, but it's a synthetic test and
         # we use it anyway.
         pkt = eth / ip / udp / http / httpreq
-        flows_list.append((src_ip, dst_ip, src_port, dst_port, pkt))
+        flows_list[flow_idx] = pkt
+    print("Setup all the flows")
 
     for group_idx in range(args.slf_group_count):
         for flow_idx in range(args.flow_num):
             # src_ip, dst_ip, src_port, dst_port = flows_list[flow_idx]
             for i in range(args.slf):
                 # pkt_size = random.randint(200, 300)
-                pkt_list.append(flows_list[flow_idx][4])
+                pkt_list[cnt] = flows_list[flow_idx]
+                cnt += 1
     return pkt_list
 
 
@@ -63,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--slf", help="spacial locality factor(SLF)", type=int, default=1)
     parser.add_argument(
-        "--flow-num", help="total number of flow", type=int, default=1)
+        "--flow-num", help="total number of flow", type=int, default=10000)
     parser.add_argument(
         "--slf-group-count", help="total_packets_per_flow = slf_group_count * slf", type=int, default=1)
     parser.add_argument(
