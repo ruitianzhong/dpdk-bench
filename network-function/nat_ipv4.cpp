@@ -155,9 +155,9 @@ int main(int argc, char const *argv[])
     }
     struct timeval start_time, end_time;
     uint64_t total_us = 0;
-    // load the data before processing
-    PacketsLoader pl = PacketsLoader(std::string(argv[1]), 5000);
     uint64_t cnt = 0;
+    // load the data before processing
+    PacketsLoader pl = PacketsLoader(std::string(argv[1]), 10000);
     std::cout << "NAT processing start" << std::endl;
     gettimeofday(&start_time, NULL);
     // the killer microsecond
