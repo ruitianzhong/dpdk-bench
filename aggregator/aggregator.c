@@ -19,6 +19,7 @@
 #include <rte_ip.h>
 #include <rte_udp.h>
 #include <rte_tcp.h>
+#include <rte_ethdev.h>
 #include <rte_mempool.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
@@ -89,6 +90,19 @@ err:
     return NULL;
 }
 
+struct packet *get_packet_from_ready_queue(struct aggregator *agg)
+{
+    struct packet *p = NULL;
+
+    if (TAILQ_EMPTY(&agg->ready_queue)){
+        return p;
+    }
+    p = TAILQ_FIRST(&agg->ready_queue);
+
+    TAILQ_REMOVE(&agg->ready_queue, p, tailq);
+    return p;
+}
+
 void aggregator_free(struct aggregator *agg)
 {
     if (agg == NULL)
@@ -101,16 +115,40 @@ void aggregator_free(struct aggregator *agg)
     rte_free(agg);
 }
 
-uint16_t aggregator_rx_burst(struct packet *pkts, const uint16_t nb_pkts)
+
+RTE_INIT(init_aggregator_context)
 {
+}
+
+uint16_t aggregator_rx_burst(uint16_t port_id, uint16_t queue_id,
+                             struct rte_mbuf **rx_pkts, const uint16_t nb_pkts)
+{
+    // port_id + queue_id = ?? TODO?
+    struct rte_mbuf *private_bufs[MAX_PKT_BURST];
+    int cnt = 0;
+    struct packet *p = NULL;
+    int cnt = rte_eth_rx_burst(port_id, queue_id, private_bufs, MAX_PKT_BURST);
+
     return 0;
 }
 
 void schedule(struct aggregator *agg, uint64_t cur_tsc)
 {
 
-    if (0)
+    while (!TAILQ_EMPTY(&agg->flow_list))
     {
+        struct flow_entry *fe = TAILQ_FIRST(&agg->flow_list);
+        // TODO: calculate the exact time here
+        if (cur_tsc - fe->created_tsc >= agg->buffer_time_us)
+        {
+            // get batch
+            TAILQ_CONCAT(&agg->ready_queue, &fe->head, tailq);
+            TAILQ_REMOVE(&agg->flow_list, fe, tailq);
+        }
+        else
+        {
+            break;
+        }
     }
 }
 
