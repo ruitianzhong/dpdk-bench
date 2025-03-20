@@ -165,7 +165,7 @@ int parse_ipv4(char *str, int len, uint32_t *ipv4, int *netmask)
     return 0;
 }
 
-void read_acl_from_file(char *filename, size_t len, struct acl_ipv4_rule *rules, uint32_t num_rules, struct firewall *fw)
+void read_acl_from_file(char *filename, struct acl_ipv4_rule *rules, uint32_t max_num_rules, struct firewall *fw)
 {
     FILE *file;
     char line[MAX_LINE_CHARACTER];
@@ -179,7 +179,7 @@ void read_acl_from_file(char *filename, size_t len, struct acl_ipv4_rule *rules,
 
     while (fgets(line, sizeof(line), file) != NULL)
     {
-        if (fw->num_rule >= num_rules)
+        if (fw->num_rule >= max_num_rules)
         {
             break;
         }
@@ -233,22 +233,16 @@ struct firewall *firewall_create()
         .rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ipv4_defs)),
         .max_rule_num = 8,
     };
-    struct acl_ipv4_rule acl_rules[] = {
-        {
-            .data = {.userdata = 1, .category_mask = 1, .priority = 1},
-            .field[2] = {
-                .value.u32 = RTE_IPV4(192, 168, 0, 0),
-                .mask_range.u32 = 16,
-            },
-            .field[3] = {
-                .value.u16 = 0,
-                .mask_range.u16 = 0xffff,
-            },
-            .field[4] = {
-                .value.u16 = 0,
-                .mask_range.u16 = 0xffff,
-            },
-        }};
+
+    struct acl_ipv4_rule *acl_rules = rte_malloc("acl_rule", sizeof(struct acl_ipv4_rule) * MAX_ACL_RULES, 0);
+
+    if (acl_rules)
+    {
+        rte_panic("not enough memory");
+    }
+
+    read_acl_from_file("fw.rules", acl_rules, MAX_ACL_RULES, fw);
+
     if ((acx = rte_acl_create(&param)) == NULL)
     {
         rte_exit(EXIT_FAILURE, "failed to create acl context");
