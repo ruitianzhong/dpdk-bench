@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-
 struct packet
 {
     uint8_t *data;
@@ -15,10 +14,11 @@ struct packet
 
 struct __rte_packed_begin ipv4_5tuple
 {
+    uint8_t proto;
     uint32_t ip_dst;
     uint32_t ip_src;
     uint16_t port_dst;
     uint16_t port_src;
-    uint8_t proto;
+
 } __rte_packed_end;
 #endif
