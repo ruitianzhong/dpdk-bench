@@ -33,6 +33,8 @@
 #include <rte_acl.h>
 // ACL reference https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
 #define MAX_ACL_RULES 20000
+#define MAX_LINE_CHARACTER 64
+#define MAX_RULE_NUM 30000
 
 enum
 {
@@ -96,8 +98,112 @@ struct firewall
     uint32_t res_ipv4[MAX_PKT_BURST];
 };
 
-int read_acl_from_file(char *filename, size_t len)
+int parse_ipv4(char *str, int len, uint32_t *ipv4, int *netmask)
 {
+    int mask;
+    uint8_t ip[4];
+
+    int current = 0;
+    int idx = 0, ip_idx = 0;
+    int start = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        if (idx >= len)
+        {
+            return -1;
+        }
+        int cnt = 0;
+
+        while (idx < len && cnt < 3)
+        {
+            if (str[idx] == '.' || str[idx] == '/')
+            {
+                idx++;
+                break;
+            }
+
+            if (str[idx] > '9' || str[idx] < '0')
+            {
+                return -1;
+            }
+            current = current * 10 + (str[idx] - '0');
+            idx++;
+            cnt++;
+        }
+        if (cnt == 3)
+        {
+            return -1;
+        }
+
+        ip[i] = current;
+    }
+
+    if (idx >= len)
+    {
+        return -1;
+    }
+
+    current = 0;
+    for (int i = 0; i < 2 && idx < len; i++)
+    {
+        if (str[idx] < '0' || str[idx] > '9')
+        {
+            return -1;
+        }
+        current = current * 10 + str[idx] - '0';
+    }
+
+    *ipv4 = RTE_IPV4(ip[0], ip[1], ip[2], ip[3]);
+    *netmask = current;
+    return 0;
+}
+
+void read_acl_from_file(char *filename, size_t len, struct acl_ipv4_rule *rules, uint32_t num_rules, struct firewall *fw)
+{
+    FILE *file;
+    char line[MAX_LINE_CHARACTER];
+    file = fopen(filename, "r");
+
+    if (NULL == file)
+    {
+        perror("firewall");
+        rte_exit(EXIT_FAILURE, "failed to open the file");
+    }
+
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        if (fw->num_rule >= num_rules)
+        {
+            break;
+        }
+
+        int len = strlen(line);
+        uint32_t ipv4_addr;
+        int mask;
+        if (parse_ipv4(line, len, &ipv4_addr, &mask) < 0)
+        {
+            printf("can not parse ipv4 addr %s\n", line);
+            continue;
+        }
+
+        struct acl_ipv4_rule rule = {
+            .data = {.userdata = 1, .category_mask = 1, .priority = 1},
+            .field[2] = {
+                .value.u32 = ipv4_addr,
+                .mask_range.u32 = mask,
+            },
+            .field[3] = {
+                .value.u16 = 0,
+                .mask_range.u16 = 0xffff,
+            },
+            .field[4] = {
+                .value.u16 = 0,
+                .mask_range.u16 = 0xffff,
+            },
+        };
+
+        rules[fw->num_rule++] = rule;
+    }
 }
 
 struct firewall *firewall_create()
@@ -160,6 +266,8 @@ struct firewall *firewall_create()
     }
     rte_acl_dump(acx);
     fw->acl_ctx = acx;
+    fw->num_rule = 0;
+    fw->num_ipv4 = 0;
 
     // rte_acl_classify(acx, data, results, 1, 4);
     return fw;
@@ -179,4 +287,6 @@ void firewall_free(struct firewall *fw)
 
 static int process_packet(struct firewall * fw,uint16_t *data, size_t length)
 {
+
+
 }
