@@ -1,37 +1,39 @@
+#include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
-#include <errno.h>
 #include <sys/queue.h>
 
-#include <rte_memory.h>
-#include <rte_launch.h>
-#include <rte_eal.h>
-#include <rte_per_lcore.h>
-#include <rte_lcore.h>
 #include <rte_debug.h>
-#include <rte_lcore_var.h>
-#include <rte_spinlock.h>
+#include <rte_eal.h>
+#include <rte_ethdev.h>
+#include <rte_ether.h>
 #include <rte_hash.h>
 #include <rte_hash_crc.h>
 #include <rte_ip.h>
-#include <rte_ether.h>
-#include <rte_udp.h>
-#include <rte_tcp.h>
-#include <rte_ethdev.h>
+#include <rte_launch.h>
+#include <rte_lcore.h>
+#include <rte_lcore_var.h>
+#include <rte_memory.h>
 #include <rte_mempool.h>
+#include <rte_per_lcore.h>
+#include <rte_spinlock.h>
+#include <rte_tcp.h>
+#include <rte_udp.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
 #define HASH_ENTRIES 2048
+#include "../util.h"
 #include "aggregator.h"
 #include <rte_memory.h>
-#include "../util.h"
 
-#include <stdio.h>
-#include <stddef.h>
-#include <rte_malloc.h>
+#include "common.h"
 #include <rte_acl.h>
-// ACL reference https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
+#include <rte_malloc.h>
+#include <stddef.h>
+#include <stdio.h>
+// ACL reference
+// https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
 #define MAX_ACL_RULES 20000
 #define MAX_LINE_CHARACTER 64
 #define MAX_RULE_NUM 30000
@@ -41,6 +43,11 @@ enum
     FIREWALL_ALLOW
 };
 
+enum
+{
+    PACKET_IPV4,
+    PACKET_OTHER,
+};
 
 // To achieve zero-copy in the data path here
 struct rte_acl_field_def ipv4_defs[5] = {
@@ -276,7 +283,8 @@ struct firewall *firewall_create()
 
 void firewall_free(struct firewall *fw)
 {
-    if (NULL==fw){
+    if (NULL == fw)
+    {
         return;
     }
 
@@ -285,8 +293,32 @@ void firewall_free(struct firewall *fw)
     rte_free(fw);
 }
 
-static int process_packet(struct firewall * fw,uint16_t *data, size_t length)
+
+static inline uint8_t *get_ipv4_next_proto_ptr(uint8_t *data)
 {
+    return data + sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + offsetof(struct rte_ipv4_hdr, next_proto_id);
+}
 
+static int process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs, size_t length)
+{
+    fw->num_ipv4 = 0;
+    int n = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (check_if_ipv4(bufs[i]))
+        {
+            fw->types[i] = PACKET_IPV4;
+            fw->data_ipv4[fw->num_ipv4++] = get_ipv4_next_proto_ptr(bufs[i]->data_off);
+            n++;
+        }
+        else
+        {
+            fw->types[i] = PACKET_OTHER;
+        }
+    }
 
+    if (rte_acl_classify(fw->acl_ctx, fw->data_ipv4, fw->res_ipv4, fw->num_ipv4, 1) != 0)
+    {
+        rte_panic("wrong parameter");
+    }
 }
