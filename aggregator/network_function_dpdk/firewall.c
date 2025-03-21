@@ -217,7 +217,7 @@ struct firewall *firewall_create() {
       .name = "firewall_acl",
       .socket_id = SOCKET_ID_ANY,
       .rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ipv4_defs)),
-      .max_rule_num = 8,
+      .max_rule_num = MAX_ACL_RULES,
   };
 
   struct acl_ipv4_rule *acl_rules =
