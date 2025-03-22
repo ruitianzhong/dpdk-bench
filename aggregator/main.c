@@ -106,7 +106,7 @@ void fill_packets(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
     struct rte_mbuf *m = ctx->tx_pkts[i];
 
-    struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct ether_hdr *);
+    struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
     m->pkt_len = m->data_len = packet_size;
 
     m->nb_segs = 1;
@@ -156,7 +156,7 @@ void server_main_loop() {
   int ret = -1;
   uint64_t total_byte_cnt = 0;
   while (cnt < TOTAL_PACKET_COUNT) {
-    ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, &ctx->rx_pkts,
+    ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
       break;
@@ -295,7 +295,8 @@ int main(int argc, char **argv) {
     ret = rte_eth_macaddr_get(portid, &ports_eth_addr[portid]);
 
     if (ret < 0) {
-      rte_exit("Cannot get MAC address: err=%d, port=%u\n", ret, portid);
+      rte_exit(EXIT_FAILURE, "Cannot get MAC address: err=%d, port=%u\n", ret,
+               portid);
     }
 
     // enable promiscuous mode
@@ -310,7 +311,8 @@ int main(int argc, char **argv) {
     ret = rte_eth_dev_set_ptypes(portid, RTE_PTYPE_UNKNOWN, NULL, 0);
     // diable ptype parsing
     if (ret < 0) {
-      rte_exit(EXIT_FAILURE, "failed to disable ptype parsing\n", portid);
+      rte_exit(EXIT_FAILURE, "failed to disable ptype parsing portid %d\n",
+               portid);
     }
 
     ret = rte_eth_dev_start(portid);
