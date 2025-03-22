@@ -8,7 +8,6 @@
 #include <rte_ip.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
-#include <rte_lcore_var.h>
 #include <rte_memory.h>
 #include <rte_mempool.h>
 #include <rte_per_lcore.h>

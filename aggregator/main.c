@@ -7,7 +7,6 @@
 #include <rte_ip.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
-#include <rte_lcore_var.h>
 #include <rte_memory.h>
 #include <rte_per_lcore.h>
 #include <rte_spinlock.h>
@@ -47,12 +46,8 @@ struct thread_context {
 
 struct thread_context thread_ctxs[MAX_CPU_NUM];
 
-static RTE_LCORE_VAR_HANDLE(int, per_core_counts);
 // portid 0 -> generate traffic
 // portid 1 -> receive traffic
-struct __rte_cache_aligned lcore_queue_conf{
-
-};
 
 // obtained from mtcp source code directly
 static uint8_t key[] = {
@@ -63,27 +58,30 @@ static uint8_t key[] = {
     0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, /* 50 */
     0x05, 0x05                                                  /* 60 - 8 */
 };
+// obtained directly from newer version DPDK
+#define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
+  ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
+      ((mac_addrs)->addr_bytes[2]), ((mac_addrs)->addr_bytes[3]), \
+      ((mac_addrs)->addr_bytes[4]), ((mac_addrs)->addr_bytes[5])
 static struct rte_eth_conf port_conf = {
     .txmode =
         {
-            .mq_mode = RTE_ETH_MQ_TX_NONE,
+            .mq_mode = ETH_MQ_TX_NONE,
         },
     .rxmode =
         {
-            .mq_mode = RTE_ETH_MQ_RX_RSS,
+            .mq_mode = ETH_MQ_RX_RSS,
         },
 
     .rx_adv_conf =
         {
             .rss_conf = {.rss_key = NULL,
-                         .rss_hf = RTE_ETH_RSS_TCP | RTE_ETH_RSS_UDP |
-                                   RTE_ETH_RSS_IP | RTE_ETH_RSS_L2_PAYLOAD},
+                         .rss_hf = ETH_RSS_TCP | ETH_RSS_UDP | ETH_RSS_IP |
+                                   ETH_RSS_L2_PAYLOAD},
         },
 };
 
 struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
-
-struct lcore_queue_conf lcore_queue_conf[RTE_MAX_LCORE];
 
 // print all NIC info we care about
 static void print_dev_info(uint16_t portid, struct rte_eth_dev_info *info) {
@@ -111,8 +109,8 @@ void fill_packets(struct thread_context *ctx) {
 
     m->nb_segs = 1;
     m->next = NULL;
-    memcpy(&eth->src_addr, &ports_eth_addr[1], sizeof(struct rte_ether_addr));
-    memcpy(&eth->dst_addr, &ports_eth_addr[0], sizeof(struct rte_ether_addr));
+    memcpy(&eth->s_addr, &ports_eth_addr[1], sizeof(struct rte_ether_addr));
+    memcpy(&eth->d_addr, &ports_eth_addr[0], sizeof(struct rte_ether_addr));
     // just for experiment here
     eth->ether_type = rte_cpu_to_be_16(0x0101);
   }
@@ -305,8 +303,8 @@ int main(int argc, char **argv) {
       rte_exit(EXIT_FAILURE, "rte_eth_promiscuous_enable: err=%d, port=%u\n",
                ret, portid);
     }
-    printf("Port %u, Mac address: " RTE_ETHER_ADDR_PRT_FMT "\n\n", portid,
-           RTE_ETHER_ADDR_BYTES(&ports_eth_addr[portid]));
+    printf("Port %u, Mac address: %02X:%02X:%02X:%02X:%02X:%02X\n\n", portid,
+           AGG_ETHER_ADDR_BYTES(&ports_eth_addr[portid]));
 
     ret = rte_eth_dev_set_ptypes(portid, RTE_PTYPE_UNKNOWN, NULL, 0);
     // diable ptype parsing

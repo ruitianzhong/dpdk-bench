@@ -12,13 +12,11 @@ struct packet
     tailq;
 };
 
-struct __rte_packed_begin ipv4_5tuple
-{
-    uint8_t proto;
-    uint32_t ip_dst;
-    uint32_t ip_src;
-    uint16_t port_dst;
-    uint16_t port_src;
-
-} __rte_packed_end;
+struct __attribute__((packed)) ipv4_5tuple {
+  uint8_t proto;
+  uint32_t ip_dst;
+  uint32_t ip_src;
+  uint16_t port_dst;
+  uint16_t port_src;
+};
 #endif

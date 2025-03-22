@@ -14,6 +14,10 @@ cat /sys/devices/system/cpu/intel_pstate/no_turbo
 echo "1" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
 ```
 
+```bash
+pkg-config --modversion libdpd # show dpdk version
+```
+
 ## Notes
 
 Run app on specific core
