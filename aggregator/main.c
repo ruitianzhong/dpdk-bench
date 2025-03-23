@@ -27,7 +27,8 @@ static uint64_t timer_period = 10;
 #include "aggregator.h"
 
 // Descriptor
-#define RX_DESC_DEFAULT 1024
+// It need to be adjusted carefully to avoid packet drop
+#define RX_DESC_DEFAULT 1024 * 4
 #define TX_DESC_DEFAULT 1024
 static uint16_t nb_rxd = RX_DESC_DEFAULT;
 static uint16_t nb_txd = TX_DESC_DEFAULT;
@@ -42,6 +43,11 @@ struct thread_context {
   int nb_rx_pkts;
   int port_id;
   int queue_id;
+};
+
+enum {
+  SEND_SIDE,
+  RECEIVE_SIDE,
 };
 
 struct thread_context thread_ctxs[MAX_CPU_NUM];
@@ -158,6 +164,7 @@ void client_main_loop() {
     cnt += MAX_PKT_BURST;
     replenish_tx_mbuf(ctx);
   }
+  printf("client exit\n");
 }
 
 void server_main_loop() {
@@ -172,12 +179,23 @@ void server_main_loop() {
   start = rte_get_tsc_cycles();
   int cnt = 0;
   int ret = -1;
+  int loop_cnt = 0;
   uint64_t total_byte_cnt = 0;
   while (cnt < TOTAL_PACKET_COUNT) {
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
       break;
+    }
+    if (ret == 0) {
+      loop_cnt++;
+    } else {
+      loop_cnt = 0;
+    }
+    if (loop_cnt == 100000000) {
+      printf("No packet can be received, total_byte_cnt=%ld Exit!\n",
+             total_byte_cnt);
+      return;
     }
     cnt += ret;
     for (int i = 0; i < ret; i++) {
@@ -192,7 +210,7 @@ void server_main_loop() {
 
   double us = ((double)(end - start)) / (double)hz;
 
-  printf("Throughput: %f Gbps\n",
+  printf("Queue %d Throughput: %f Gbps\n", ctx->queue_id,
          8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
 }
 // port 0 client port 1 server

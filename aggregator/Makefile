@@ -4,7 +4,7 @@
 APP = back2back
 
 # all source are stored in SRCS-y
-SRCS-y := main.c
+SRCS-y := main.c network_function_dpdk/echo.c network_function_dpdk/one_way.c
 
 PKGCONF ?= pkg-config
 

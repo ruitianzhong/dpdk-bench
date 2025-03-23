@@ -25,7 +25,7 @@ dpdk-devbind.py -b vfio-pci 0000:82:00.1
 dpdk-devbind.py -b vfio-pci 0000:04:00.1
 ```
 ```bash
-pkg-config --modversion libdpd # show dpdk version
+pkg-config --modversion libdpdk # show dpdk version
 ```
 
 ## Notes
