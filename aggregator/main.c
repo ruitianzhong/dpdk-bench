@@ -20,7 +20,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 500)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 100000)
 #define MAX_CPU_NUM 64
 #define QUEUE_PER_PORT 1
 static uint64_t timer_period = 10;
@@ -70,7 +70,7 @@ static struct rte_eth_conf port_conf = {
         },
     .rxmode =
         {
-            .mq_mode = ETH_MQ_RX_RSS,
+            .mq_mode = ETH_MQ_RX_NONE,
         },
 
     .rx_adv_conf =
@@ -95,6 +95,9 @@ static void print_dev_info(uint16_t portid, struct rte_eth_dev_info *info) {
 void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
     ctx->tx_pkts[i] = rte_pktmbuf_alloc(ctx->pool);
+    if (ctx->tx_pkts[i] == NULL) {
+      rte_panic("can not allocate tx mbuf\n");
+    }
   }
 }
 
@@ -107,11 +110,27 @@ void fill_packets(struct thread_context *ctx) {
 
     m->nb_segs = 1;
     m->next = NULL;
-    memcpy(&eth->s_addr, &ports_eth_addr[1], sizeof(struct rte_ether_addr));
-    memcpy(&eth->d_addr, &ports_eth_addr[0], sizeof(struct rte_ether_addr));
+    memcpy(&eth->s_addr, &ports_eth_addr[0], sizeof(struct rte_ether_addr));
+    memcpy(&eth->d_addr, &ports_eth_addr[1], sizeof(struct rte_ether_addr));
     // just for experiment here
-    eth->ether_type = rte_cpu_to_be_16(0x0101);
+    eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
   }
+}
+
+void print_eth_stat(int portid) {
+  struct rte_eth_stats stat;
+  printf("\n----------- Statistic for port %d ----------------\n", portid);
+  int ret = rte_eth_stats_get(portid, &stat);
+  if (ret != 0) {
+    rte_panic("Cannot get stat from port %d\n", portid);
+  }
+  printf(
+      "Ingress:  pkt_cnt: %ld total byte: %ld ierror: %ld "
+      "imiss:%ld\n",
+      stat.ipackets, stat.ibytes, stat.ierrors, stat.imissed);
+  printf("Egress: pkt_cnt: %ld total byte: %ld oerror: %ld\n", stat.opackets,
+         stat.obytes, stat.oerrors);
+  printf("--------------------------------------------------\n\n");
 }
 
 void client_main_loop() {
@@ -144,6 +163,9 @@ void client_main_loop() {
 void server_main_loop() {
   int lcore_id = rte_lcore_id();
   struct thread_context *ctx = &thread_ctxs[lcore_id];
+  printf("server side lcore:%d port_id=%d queue_id=%d\n", lcore_id,
+         ctx->port_id, ctx->queue_id);
+
   uint64_t hz = rte_get_tsc_hz();
 
   uint64_t start, end;
@@ -170,23 +192,74 @@ void server_main_loop() {
 
   double us = ((double)(end - start)) / (double)hz;
 
-  printf("xput: %f\n", (double)(total_byte_cnt) / us);
+  printf("Throughput: %f Gbps\n",
+         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
 }
 // port 0 client port 1 server
 static int lcore_function(__rte_unused void *dummy) {
   uint16_t lcore_id = rte_lcore_id();
 
+  if (lcore_id >= QUEUE_PER_PORT * 2) {
+    return 0;
+  }
   if (lcore_id < QUEUE_PER_PORT) {
-    server_main_loop();
-  } else {
     client_main_loop();
+  } else {
+    server_main_loop();
   }
   return 0;
 }
 
-int fake_function(void *__rte_unused arg) {
-  printf("%d lcore\n", rte_lcore_id());
-  return 0;
+// Obtained directly from mtcp. It's really necessary to wait for the link up
+// link-up requires some time
+static void check_all_ports_link_status(uint8_t port_num) {
+#define CHECK_INTERVAL 100 /* 100ms */
+#define MAX_CHECK_TIME 90  /* 9s (90 * 100ms) in total */
+
+  uint8_t portid, count, all_ports_up, print_flag = 0;
+  struct rte_eth_link link;
+
+  printf("\nChecking link status\n");
+  fflush(stdout);
+  for (count = 0; count <= MAX_CHECK_TIME; count++) {
+    all_ports_up = 1;
+    for (portid = 0; portid < port_num; portid++) {
+      memset(&link, 0, sizeof(link));
+      rte_eth_link_get_nowait(portid, &link);
+      /* print link status if flag set */
+      if (print_flag == 1) {
+        if (link.link_status)
+          printf(
+              "Port %d Link Up - speed %u "
+              "Mbps - %s\n",
+              (uint8_t)portid, (unsigned)link.link_speed,
+              (link.link_duplex == ETH_LINK_FULL_DUPLEX) ? ("full-duplex")
+                                                         : ("half-duplex\n"));
+        else
+          printf("Port %d Link Down\n", (uint8_t)portid);
+        continue;
+      }
+      /* clear all_ports_up flag if any link down */
+      if (link.link_status == 0) {
+        all_ports_up = 0;
+        break;
+      }
+    }
+    /* after finally printing all link status, get out */
+    if (print_flag == 1) break;
+
+    if (all_ports_up == 0) {
+      printf(".");
+      fflush(stdout);
+      rte_delay_ms(CHECK_INTERVAL);
+    }
+
+    /* set the print_flag if all ports up or timeout */
+    if (all_ports_up == 1 || count == (MAX_CHECK_TIME - 1)) {
+      print_flag = 1;
+      printf("done\n");
+    }
+  }
 }
 
 /* Initialization of Environment Abstraction Layer (EAL). 8< */
@@ -195,6 +268,7 @@ int main(int argc, char **argv) {
   unsigned lcore_id;
   unsigned int nb_mbufs;
   uint16_t portid;
+  uint64_t start, end;
 
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
@@ -313,11 +387,7 @@ int main(int argc, char **argv) {
     }
 
     // enable promiscuous mode
-    ret = rte_eth_promiscuous_enable(portid);
-    if (ret < 0) {
-      rte_exit(EXIT_FAILURE, "rte_eth_promiscuous_enable: err=%d, port=%u\n",
-               ret, portid);
-    }
+
     printf("Port %u, Mac address: %02X:%02X:%02X:%02X:%02X:%02X\n\n", portid,
            AGG_ETHER_ADDR_BYTES(&ports_eth_addr[portid]));
 
@@ -333,23 +403,36 @@ int main(int argc, char **argv) {
       rte_exit(EXIT_FAILURE, "rte_eth_dev_start: err=%d, port=%u\n", ret,
                portid);
     }
+    ret = rte_eth_promiscuous_enable(portid);
+    if (ret < 0) {
+      rte_exit(EXIT_FAILURE, "rte_eth_promiscuous_enable: err=%d, port=%u\n",
+               ret, portid);
+    }
 
     nb_port++;
   }
 
+  check_all_ports_link_status(2);
+
+  // rte_eth_stats_reset(0);
+  // rte_eth_stats_reset(1);
+
+  print_eth_stat(0);
+  print_eth_stat(1);
+
   // pitfall in rte_eal_remote_launch?
-
-  rte_eal_mp_remote_launch(fake_function, NULL, CALL_MAIN);
-
-  for (int id = 0; id < QUEUE_PER_PORT * 2; id++) {
-    rte_eal_wait_lcore(id);
-  }
+  start = rte_get_tsc_cycles();
+  rte_eal_mp_remote_launch(lcore_function, NULL, CALL_MAIN);
 
   RTE_LCORE_FOREACH_WORKER(lcore_id) {
     if (rte_eal_wait_lcore(lcore_id) < 0) {
       printf("Non zero return\n");
     }
   }
+  end = rte_get_tsc_cycles();
+  print_eth_stat(0);
+  print_eth_stat(1);
+
   // close device here
   RTE_ETH_FOREACH_DEV(portid) {
     if (portid != 0 && portid != 1) {
@@ -367,6 +450,6 @@ int main(int argc, char **argv) {
   /* >8 End of initialization of Environment Abstraction Layer */
   rte_eal_cleanup();
   printf("Exit ...\n");
-
+  printf("Total time %f s\n", (double)(end - start) / (double)rte_get_tsc_hz());
   return 0;
 }

@@ -1,8 +1,7 @@
-# SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2010-2014 Intel Corporation
+# Based on Makefile in dpdk source code.
 
 # binary name
-APP = helloworld
+APP = back2back
 
 # all source are stored in SRCS-y
 SRCS-y := main.c
