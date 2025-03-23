@@ -12,8 +12,18 @@ echo -1 >> /proc/sys/kernel/perf_event_paranoid
 # disable turbo boost
 cat /sys/devices/system/cpu/intel_pstate/no_turbo
 echo "1" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
+
+# Two NUMA node here
+echo 2048 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
+echo 2048 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepages
+mkdir /mnt/huge
+mount -t hugetlbfs pagesize=1GB /mnt/huge
 ```
 
+```bash
+dpdk-devbind.py -b vfio-pci 0000:82:00.1
+dpdk-devbind.py -b vfio-pci 0000:04:00.1
+```
 ```bash
 pkg-config --modversion libdpd # show dpdk version
 ```

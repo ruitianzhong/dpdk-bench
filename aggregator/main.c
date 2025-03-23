@@ -22,7 +22,7 @@
 #define MEMPOOL_CACHE_SIZE 256
 #define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 500)
 #define MAX_CPU_NUM 64
-#define QUEUE_PER_PORT 4
+#define QUEUE_PER_PORT 1
 static uint64_t timer_period = 10;
 #include "aggregator.h"
 
@@ -75,9 +75,7 @@ static struct rte_eth_conf port_conf = {
 
     .rx_adv_conf =
         {
-            .rss_conf = {.rss_key = NULL,
-                         .rss_hf = ETH_RSS_TCP | ETH_RSS_UDP | ETH_RSS_IP |
-                                   ETH_RSS_L2_PAYLOAD},
+            .rss_conf = {.rss_key = NULL, .rss_hf = 0},
         },
 };
 
@@ -91,7 +89,7 @@ static void print_dev_info(uint16_t portid, struct rte_eth_dev_info *info) {
          info->min_mtu);
 
   printf("RSS hash key size: %d\n", info->hash_key_size);
-
+  // printf("");
   printf("\n\n");
 }
 void replenish_tx_mbuf(struct thread_context *ctx) {
@@ -186,6 +184,11 @@ static int lcore_function(__rte_unused void *dummy) {
   return 0;
 }
 
+int fake_function(void *__rte_unused arg) {
+  printf("%d lcore\n", rte_lcore_id());
+  return 0;
+}
+
 /* Initialization of Environment Abstraction Layer (EAL). 8< */
 int main(int argc, char **argv) {
   int ret, nb_ports;
@@ -207,6 +210,15 @@ int main(int argc, char **argv) {
     rte_exit(EXIT_FAILURE, "No Ethernet ports\n");
   }
 
+  for (int i = 0; i < nb_ports; i++) {
+    struct rte_eth_dev_info dev_info;
+    int ret = rte_eth_dev_info_get(i, &dev_info);
+    if (ret < 0) {
+      rte_exit(EXIT_FAILURE, "ret:%d\n", ret);
+    }
+    print_dev_info(i, &dev_info);
+  }
+
   for (int core_id = 0; core_id < QUEUE_PER_PORT * 2; core_id++) {
     struct thread_context *ctx = &thread_ctxs[core_id];
     ctx->nb_rx_pkts = 0;
@@ -225,10 +237,11 @@ int main(int argc, char **argv) {
     if (ctx->pool == NULL) {
       rte_exit(EXIT_FAILURE, "Can not init mbuf pool\n");
     }
+    printf("set up mempool for core %d\n", core_id);
   }
   int nb_port = 0;
   RTE_ETH_FOREACH_DEV(portid) {
-    if (portid != 0 || portid != 1) {
+    if (portid != 0 && portid != 1) {
       continue;
     }
 
@@ -238,8 +251,8 @@ int main(int argc, char **argv) {
     struct rte_eth_dev_info dev_info;
 
     // set up RSS
-    local_port_conf.rx_adv_conf.rss_conf.rss_key = key;
-    local_port_conf.rx_adv_conf.rss_conf.rss_key_len = sizeof(key);
+    // local_port_conf.rx_adv_conf.rss_conf.rss_key = key;
+    // local_port_conf.rx_adv_conf.rss_conf.rss_key_len = sizeof(key);
 
     printf("Init port %u...\n", portid);
 
@@ -252,7 +265,7 @@ int main(int argc, char **argv) {
                portid, strerror(-ret));
     }
 
-    ret = rte_eth_dev_configure(portid, MAX_CPU_NUM, MAX_CPU_NUM,
+    ret = rte_eth_dev_configure(portid, QUEUE_PER_PORT, QUEUE_PER_PORT,
                                 &local_port_conf);
 
     if (ret < 0) {
@@ -275,14 +288,16 @@ int main(int argc, char **argv) {
 
     for (int core_id = QUEUE_PER_PORT * nb_port;
          core_id < QUEUE_PER_PORT * nb_port + QUEUE_PER_PORT; core_id++) {
-      ret = rte_eth_rx_queue_setup(portid, core_id, nb_rxd,
+      uint16_t queue_id = core_id % QUEUE_PER_PORT;
+      printf("configure queue %d\n", queue_id);
+      ret = rte_eth_rx_queue_setup(portid, queue_id, nb_rxd,
                                    rte_eth_dev_socket_id(portid), &rxq_conf,
                                    thread_ctxs[core_id].pool);
       if (ret < 0) {
         rte_exit(EXIT_FAILURE, "rx_queue_setup port:%u err:%d\n", portid, ret);
       }
 
-      ret = rte_eth_tx_queue_setup(portid, core_id, nb_txd,
+      ret = rte_eth_tx_queue_setup(portid, queue_id, nb_txd,
                                    rte_eth_dev_socket_id(portid), &txq_conf);
 
       if (ret < 0) {
@@ -299,7 +314,7 @@ int main(int argc, char **argv) {
 
     // enable promiscuous mode
     ret = rte_eth_promiscuous_enable(portid);
-    if (ret != 0) {
+    if (ret < 0) {
       rte_exit(EXIT_FAILURE, "rte_eth_promiscuous_enable: err=%d, port=%u\n",
                ret, portid);
     }
@@ -322,8 +337,22 @@ int main(int argc, char **argv) {
     nb_port++;
   }
 
+  // pitfall in rte_eal_remote_launch?
+
+  rte_eal_mp_remote_launch(fake_function, NULL, CALL_MAIN);
+
+  for (int id = 0; id < QUEUE_PER_PORT * 2; id++) {
+    rte_eal_wait_lcore(id);
+  }
+
+  RTE_LCORE_FOREACH_WORKER(lcore_id) {
+    if (rte_eal_wait_lcore(lcore_id) < 0) {
+      printf("Non zero return\n");
+    }
+  }
+  // close device here
   RTE_ETH_FOREACH_DEV(portid) {
-    if (portid != 0 || portid != 1) {
+    if (portid != 0 && portid != 1) {
       continue;
     }
     printf("Closing port %d\n", portid);
