@@ -2,7 +2,8 @@
 
 #include "../aggregator.h"
 
-#define BURST_TX_DRAIN_US 100
+#define BURST_TX_DRAIN_US 46
+#define MAX_INFLIGHT_PACKET (1024 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -40,6 +41,7 @@ static void fill_packets(struct thread_context *ctx) {
 static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
                                   int *total_byte) {
   uint64_t total = 0;
+  static int idx = 0;
   for (int i = 0; i < nb_pkts; i++) {
     struct rte_mbuf *mbuf = rx_pkts[i];
 
@@ -50,7 +52,7 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
 
     uint64_t *p = rte_pktmbuf_mtod_offset(mbuf, uint64_t *, offset);
     uint64_t start = rte_be_to_cpu_64(*p), end = rte_get_tsc_cycles();
-    total += (end - start);
+    total = total + ((end - start) * 1000 * 1000) / rte_get_tsc_hz();
     *total_byte = *total_byte + mbuf->data_len;
   }
   return total;
@@ -79,34 +81,35 @@ static void echo_sender(thread_context_t *ctx) {
   const uint64_t drain_tsc =
       (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S * BURST_TX_DRAIN_US;
 
-  uint64_t prev_tsc = 0, cur_tsc = 0,difftsc;
+  uint64_t prev_tsc = 0, cur_tsc = 0, difftsc;
   printf("sender start\n");
   replenish_tx_mbuf(ctx);
   uint16_t ret = 0;
-  uint64_t total_latency = 0;
+  uint64_t total_latency_us = 0, total_byte_cnt = 0, inflight_packet = 0;
   uint64_t start, end;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
-  uint64_t total_byte_cnt = 0;
-
   while (cnt < TOTAL_PACKET_COUNT) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
-    if (difftsc > drain_tsc) {
+    if (inflight_packet < MAX_INFLIGHT_PACKET) {
+      // if (difftsc > drain_tsc) {
       fill_packets(ctx);
 
       send_all(ctx, ctx->tx_pkts, MAX_PKT_BURST);
       cnt += MAX_PKT_BURST;
       replenish_tx_mbuf(ctx);
       prev_tsc = cur_tsc;
+      inflight_packet += MAX_PKT_BURST;
     }
 
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
+    inflight_packet -= ret;
     int bytes_cnt = 0;
     if (ret > 0) {
-      total_latency += calculate_latency(ctx->rx_pkts, ret, &bytes_cnt);
+      total_latency_us += calculate_latency(ctx->rx_pkts, ret, &bytes_cnt);
     }
 
     total_byte_cnt += bytes_cnt;
@@ -114,10 +117,9 @@ static void echo_sender(thread_context_t *ctx) {
       rte_pktmbuf_free(ctx->rx_pkts[i]);
     }
   }
-  printf("client exit\n");
   // TODO: calculate tail latency(more important for SLO)
   printf("average latency: %f\n",
-         (double)(total_latency * 1000 * 1000) / (double)rte_get_tsc_cycles());
+         (double)total_latency_us / (double)TOTAL_PACKET_COUNT);
 
   end = rte_get_tsc_cycles();
   uint64_t hz = rte_get_tsc_hz();
