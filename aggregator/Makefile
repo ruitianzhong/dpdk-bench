@@ -5,6 +5,7 @@ APP = back2back
 
 # all source are stored in SRCS-y
 SRCS-y := main.c network_function_dpdk/echo.c network_function_dpdk/one_way.c
+HEADERS := aggregator.h
 
 PKGCONF ?= pkg-config
 
@@ -35,7 +36,7 @@ endif
 
 CFLAGS += -DALLOW_EXPERIMENTAL_API
 
-build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) | build
+build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) ${HEADERS} | build
 	$(CC) $(CFLAGS) $(SRCS-y) -o $@ $(LDFLAGS) $(LDFLAGS_SHARED)
 
 build/$(APP)-static: $(SRCS-y) Makefile $(PC_FILE) | build

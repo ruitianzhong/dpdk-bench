@@ -85,4 +85,5 @@ enum {
 };
 
 extern struct dpdk_app one_way_app;
+extern struct dpdk_app echo_app;
 #endif
