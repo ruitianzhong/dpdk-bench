@@ -17,12 +17,7 @@
 #define DEFAULT_HASH_FUNC rte_hash_crc
 #define HASH_ENTRIES 2048
 #include <stdlib.h>
-#define MAX_CORE_NUM 40
-#define NB_MBUF 8192
-#define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 100000)
-#define MAX_CPU_NUM 64
-#define QUEUE_PER_PORT 1
+
 static uint64_t timer_period = 10;
 #include "aggregator.h"
 
@@ -32,25 +27,9 @@ static uint64_t timer_period = 10;
 #define TX_DESC_DEFAULT 1024
 static uint16_t nb_rxd = RX_DESC_DEFAULT;
 static uint16_t nb_txd = TX_DESC_DEFAULT;
-static int num_threads = MAX_CPU_NUM;
 static int packet_size = 1000;
 // TODO: max_queue, rss_key setup
-struct thread_context {
-  struct rte_mempool *pool;
-  struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
-  int nb_tx_pkts;
-  struct rte_mbuf *rx_pkts[MAX_PKT_BURST];
-  int nb_rx_pkts;
-  int port_id;
-  int queue_id;
-};
-
-enum {
-  SEND_SIDE,
-  RECEIVE_SIDE,
-};
-
-struct thread_context thread_ctxs[MAX_CPU_NUM];
+struct thread_context thread_ctxs[RTE_MAX_LCORE];
 
 // portid 0 -> generate traffic
 // portid 1 -> receive traffic
@@ -64,6 +43,9 @@ static uint8_t key[] = {
     0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, /* 50 */
     0x05, 0x05                                                  /* 60 - 8 */
 };
+
+static struct dpdk_app *app = NULL;
+
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
@@ -107,22 +89,6 @@ void replenish_tx_mbuf(struct thread_context *ctx) {
   }
 }
 
-void fill_packets(struct thread_context *ctx) {
-  for (int i = 0; i < MAX_PKT_BURST; i++) {
-    struct rte_mbuf *m = ctx->tx_pkts[i];
-
-    struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
-    m->pkt_len = m->data_len = packet_size;
-
-    m->nb_segs = 1;
-    m->next = NULL;
-    memcpy(&eth->s_addr, &ports_eth_addr[0], sizeof(struct rte_ether_addr));
-    memcpy(&eth->d_addr, &ports_eth_addr[1], sizeof(struct rte_ether_addr));
-    // just for experiment here
-    eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
-  }
-}
-
 void print_eth_stat(int portid) {
   struct rte_eth_stats stat;
   printf("\n----------- Statistic for port %d ----------------\n", portid);
@@ -139,80 +105,6 @@ void print_eth_stat(int portid) {
   printf("--------------------------------------------------\n\n");
 }
 
-void client_main_loop() {
-  uint16_t lcore_id = rte_lcore_id();
-
-  if (lcore_id > MAX_CPU_NUM) {
-    rte_panic("unexpected lcore_id");
-  }
-  int cnt = 0;
-  struct thread_context *ctx = &thread_ctxs[lcore_id];
-
-  replenish_tx_mbuf(ctx);
-  int ret = 0;
-  while (cnt < TOTAL_PACKET_COUNT) {
-    fill_packets(ctx);
-    int remain = MAX_PKT_BURST;
-    struct rte_mbuf **mp = ctx->tx_pkts;
-    do {
-      ret = rte_eth_tx_burst(ctx->port_id, ctx->queue_id, mp, remain);
-
-      mp += ret;
-      remain -= ret;
-
-    } while (remain > 0);
-    cnt += MAX_PKT_BURST;
-    replenish_tx_mbuf(ctx);
-  }
-  printf("client exit\n");
-}
-
-void server_main_loop() {
-  int lcore_id = rte_lcore_id();
-  struct thread_context *ctx = &thread_ctxs[lcore_id];
-  printf("server side lcore:%d port_id=%d queue_id=%d\n", lcore_id,
-         ctx->port_id, ctx->queue_id);
-
-  uint64_t hz = rte_get_tsc_hz();
-
-  uint64_t start, end;
-  start = rte_get_tsc_cycles();
-  int cnt = 0;
-  int ret = -1;
-  int loop_cnt = 0;
-  uint64_t total_byte_cnt = 0;
-  while (cnt < TOTAL_PACKET_COUNT) {
-    ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
-                           MAX_PKT_BURST);
-    if (ret < 0) {
-      break;
-    }
-    if (ret == 0) {
-      loop_cnt++;
-    } else {
-      loop_cnt = 0;
-    }
-    if (loop_cnt == 100000000) {
-      printf("No packet can be received, total_byte_cnt=%ld Exit!\n",
-             total_byte_cnt);
-      return;
-    }
-    cnt += ret;
-    for (int i = 0; i < ret; i++) {
-      total_byte_cnt += ctx->rx_pkts[i]->data_len;
-    }
-
-    for (int i = 0; i < ret; i++) {
-      rte_pktmbuf_free(ctx->rx_pkts[i]);
-    }
-  }
-  end = rte_get_tsc_cycles();
-
-  double us = ((double)(end - start)) / (double)hz;
-
-  printf("Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
-}
 // port 0 client port 1 server
 static int lcore_function(__rte_unused void *dummy) {
   uint16_t lcore_id = rte_lcore_id();
@@ -221,9 +113,9 @@ static int lcore_function(__rte_unused void *dummy) {
     return 0;
   }
   if (lcore_id < QUEUE_PER_PORT) {
-    client_main_loop();
+    app->send(&thread_ctxs[lcore_id]);
   } else {
-    server_main_loop();
+    app->receive(&thread_ctxs[lcore_id]);
   }
   return 0;
 }
@@ -287,7 +179,7 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
-
+  app = &one_way_app;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
   // adjust cmdline parameters
@@ -318,6 +210,10 @@ int main(int argc, char **argv) {
 
     ctx->port_id = core_id / QUEUE_PER_PORT;
     ctx->queue_id = core_id % QUEUE_PER_PORT;
+
+    ctx->packet_size = packet_size;
+
+    ctx->eth_addrs = ports_eth_addr;
 
     char name[64];
 

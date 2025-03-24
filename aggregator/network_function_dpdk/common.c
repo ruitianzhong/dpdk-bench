@@ -1,5 +1,4 @@
-#include <rte_ip.h>
-#include <rte_mbuf.h>
+#include "../aggregator.h"
 
 int check_if_ipv4(struct rte_mbuf *mbuf) {
   if (mbuf == NULL) {

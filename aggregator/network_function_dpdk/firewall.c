@@ -8,7 +8,6 @@
 #include <rte_ip.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
-#include <rte_lcore_var.h>
 #include <rte_memory.h>
 #include <rte_mempool.h>
 #include <rte_per_lcore.h>
@@ -30,7 +29,6 @@
 
 #include "../util.h"
 #include "aggregator.h"
-#include "common.h"
 // ACL reference
 // https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
 #define MAX_ACL_RULES 20000
