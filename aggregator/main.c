@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
-  app = &echo_app;
+  app = &firewall_app;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
   // adjust cmdline parameters
@@ -216,6 +216,10 @@ int main(int argc, char **argv) {
     ctx->eth_addrs = ports_eth_addr;
 
     char name[64];
+
+    if (app->init != NULL) {
+      app->init(ctx);
+    }
 
     sprintf(name, "mbuf_pool_%d", core_id);
     ctx->pool =
@@ -341,6 +345,9 @@ int main(int argc, char **argv) {
   RTE_LCORE_FOREACH_WORKER(lcore_id) {
     if (rte_eal_wait_lcore(lcore_id) < 0) {
       printf("Non zero return\n");
+    }
+    if (app->free != NULL) {
+      app->free(&thread_ctxs[lcore_id]);
     }
   }
   end = rte_get_tsc_cycles();

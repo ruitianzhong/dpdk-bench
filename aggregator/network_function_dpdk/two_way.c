@@ -3,7 +3,7 @@
 #include "../aggregator.h"
 
 #define BURST_TX_DRAIN_US 46
-#define MAX_INFLIGHT_PACKET (512 * 1)
+#define MAX_INFLIGHT_PACKET (256 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -60,22 +60,6 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
   return total;
 }
 
-static void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
-                     uint16_t nb_pkt) {
-  int remain = nb_pkt;
-  if (!remain) {
-    return;
-  }
-
-  struct rte_mbuf **mp = tx_pkts;
-  int ret = 0;
-  do {
-    ret = rte_eth_tx_burst(ctx->port_id, ctx->queue_id, mp, remain);
-    mp += ret;
-    remain -= ret;
-  } while (remain > 0);
-}
-
 static void echo_sender(thread_context_t *ctx) {
   uint16_t lcore_id = rte_lcore_id();
 
@@ -120,7 +104,7 @@ static void echo_sender(thread_context_t *ctx) {
     }
   }
   // TODO: calculate tail latency(more important for SLO)
-  printf("average latency: %f\n",
+  printf("average latency: %f us\n",
          (double)total_latency_us / (double)TOTAL_PACKET_COUNT);
 
   end = rte_get_tsc_cycles();

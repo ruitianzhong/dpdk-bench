@@ -24,3 +24,19 @@ int check_if_ipv4(struct rte_mbuf *mbuf) {
   }
   return 1;
 }
+
+void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
+              uint16_t nb_pkt) {
+  int remain = nb_pkt;
+  if (!remain) {
+    return;
+  }
+
+  struct rte_mbuf **mp = tx_pkts;
+  int ret = 0;
+  do {
+    ret = rte_eth_tx_burst(ctx->port_id, ctx->queue_id, mp, remain);
+    mp += ret;
+    remain -= ret;
+  } while (remain > 0);
+}

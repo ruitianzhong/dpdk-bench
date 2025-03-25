@@ -68,16 +68,20 @@ struct thread_context {
   int queue_id;
   int packet_size;
   struct rte_ether_addr *eth_addrs;
+  void *private_data;
 };
 
 typedef struct thread_context thread_context_t;
 int check_if_ipv4(struct rte_mbuf *mbuf);
 typedef void(dpdk_app_function_t)(thread_context_t *ctx);
+void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
+              uint16_t nb_pkt);
 
 struct dpdk_app {
   dpdk_app_function_t *send;
   dpdk_app_function_t *receive;
   dpdk_app_function_t *init;
+  dpdk_app_function_t *free;
 };
 
 enum {

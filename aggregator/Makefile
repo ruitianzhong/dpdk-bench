@@ -4,7 +4,8 @@
 APP = back2back
 
 # all source are stored in SRCS-y
-SRCS-y := main.c network_function_dpdk/two_way.c network_function_dpdk/one_way.c
+SRCS-y := main.c network_function_dpdk/two_way.c network_function_dpdk/one_way.c network_function_dpdk/firewall.c \
+ network_function_dpdk/common.c
 HEADERS := aggregator.h
 
 PKGCONF ?= pkg-config
