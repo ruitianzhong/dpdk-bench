@@ -3,7 +3,7 @@
 #include "../aggregator.h"
 
 #define BURST_TX_DRAIN_US 46
-#define MAX_INFLIGHT_PACKET (1024 * 1)
+#define MAX_INFLIGHT_PACKET (512 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -42,19 +42,21 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
                                   int *total_byte) {
   uint64_t total = 0;
   static int idx = 0;
+  uint64_t end = rte_get_tsc_cycles();
   for (int i = 0; i < nb_pkts; i++) {
     struct rte_mbuf *mbuf = rx_pkts[i];
-
+    rte_prefetch0(rte_pktmbuf_mtod(mbuf, void *));
     int offset = sizeof(struct rte_ether_hdr);
     if (unlikely(mbuf->data_len <= offset)) {
       rte_panic("unexpected data_len: %d\n", mbuf->data_len);
     }
 
     uint64_t *p = rte_pktmbuf_mtod_offset(mbuf, uint64_t *, offset);
-    uint64_t start = rte_be_to_cpu_64(*p), end = rte_get_tsc_cycles();
-    total = total + ((end - start) * 1000 * 1000) / rte_get_tsc_hz();
+    uint64_t start = rte_be_to_cpu_64(*p);
+    total = total + (end - start);
     *total_byte = *total_byte + mbuf->data_len;
   }
+  total = (total * 1000 * 1000) / rte_get_tsc_hz();
   return total;
 }
 
@@ -133,6 +135,7 @@ static void echo_sender(thread_context_t *ctx) {
 static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
   for (int i = 0; i < nb_pkt; i++) {
     struct rte_mbuf *m = rx_pkts[i];
+    rte_prefetch0(rte_pktmbuf_mtod(m, void *));
     if (unlikely(m->data_len <= sizeof(struct rte_ether_addr))) {
       rte_panic("Unexpected recv packets len:%d\n", m->data_len);
     }

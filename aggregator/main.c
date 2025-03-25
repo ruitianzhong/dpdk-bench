@@ -23,7 +23,7 @@ static uint64_t timer_period = 10;
 
 // Descriptor
 // It need to be adjusted carefully to avoid packet drop
-#define RX_DESC_DEFAULT 1024 * 8
+#define RX_DESC_DEFAULT 1024
 #define TX_DESC_DEFAULT 1024
 static uint16_t nb_rxd = RX_DESC_DEFAULT;
 static uint16_t nb_txd = TX_DESC_DEFAULT;

@@ -291,3 +291,8 @@ static int process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
     rte_panic("wrong parameter");
   }
 }
+
+struct dpdk_app firewall_app = {
+    .receive = NULL,
+    .send = NULL,
+};

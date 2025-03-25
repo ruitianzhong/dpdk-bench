@@ -17,14 +17,14 @@
 #include <sys/queue.h>
 
 #include "util.h"
-#define MAX_PKT_BURST 64
+#define MAX_PKT_BURST 32
 #define MAX_FLOW_PER_CORE 4096
 #define MAX_AGGREGATE_PER_FLOW 16
 #define READY_QUEUE_RESERVED 4096
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 100000)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1000000)
 #define QUEUE_PER_PORT 1
 
 TAILQ_HEAD(packet_head, packet);
@@ -77,6 +77,7 @@ typedef void(dpdk_app_function_t)(thread_context_t *ctx);
 struct dpdk_app {
   dpdk_app_function_t *send;
   dpdk_app_function_t *receive;
+  dpdk_app_function_t *init;
 };
 
 enum {
@@ -86,4 +87,5 @@ enum {
 
 extern struct dpdk_app one_way_app;
 extern struct dpdk_app echo_app;
+extern struct dpdk_app firewall_app;
 #endif
