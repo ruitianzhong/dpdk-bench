@@ -46,6 +46,10 @@ static uint8_t key[] = {
 
 static struct dpdk_app *app = NULL;
 
+struct config CONFIG = {
+    .pcap_file_name = NULL,
+};
+
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \

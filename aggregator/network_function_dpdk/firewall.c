@@ -99,6 +99,7 @@ struct firewall {
 
   const uint8_t *data_ipv4[MAX_PKT_BURST];
   uint32_t res_ipv4[MAX_PKT_BURST];
+  struct pktgen_pcap *pktgen_pcap;
 };
 
 int parse_ipv4(char *str, int len, uint32_t *ipv4, int *netmask) {
@@ -248,7 +249,7 @@ struct firewall *firewall_create() {
   fw->acl_ctx = acx;
   fw->num_rule = 0;
   fw->num_ipv4 = 0;
-
+  // fw->pktgen_pcap = pktgen_pcap_create();
   // rte_acl_classify(acx, data, results, 1, 4);
   return fw;
 }
@@ -260,7 +261,7 @@ void firewall_free(struct firewall *fw) {
   }
 
   rte_acl_free(fw->acl_ctx);
-
+  // pktgen_pcap_free(fw->pktgen_pcap);
   rte_free(fw);
 }
 

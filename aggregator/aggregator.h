@@ -92,4 +92,17 @@ enum {
 extern struct dpdk_app one_way_app;
 extern struct dpdk_app echo_app;
 extern struct dpdk_app firewall_app;
+
+struct config {
+  char *pcap_file_name;
+};
+extern struct config CONFIG;
+
+struct pktgen_pcap {
+  int total_pkt_cnt;
+  struct packet **pkts;
+  int cur_idx;
+};
+struct pktgen_pcap *pktgen_pcap_create();
+void pktgen_pcap_free(struct pktgen_pcap *p);
 #endif
