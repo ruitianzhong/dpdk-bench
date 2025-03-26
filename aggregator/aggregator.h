@@ -24,7 +24,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1000000)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1)
 #define QUEUE_PER_PORT 1
 
 TAILQ_HEAD(packet_head, packet);
@@ -68,7 +68,8 @@ struct thread_context {
   int queue_id;
   int packet_size;
   struct rte_ether_addr *eth_addrs;
-  void *private_data;
+  void *send_priv_data;
+  void *recv_priv_data;
 };
 
 typedef struct thread_context thread_context_t;
@@ -80,8 +81,10 @@ void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
 struct dpdk_app {
   dpdk_app_function_t *send;
   dpdk_app_function_t *receive;
-  dpdk_app_function_t *init;
-  dpdk_app_function_t *free;
+  dpdk_app_function_t *send_init;
+  dpdk_app_function_t *send_free;
+  dpdk_app_function_t *recv_init;
+  dpdk_app_function_t *recv_free;
 };
 
 enum {
@@ -100,9 +103,16 @@ extern struct config CONFIG;
 
 struct pktgen_pcap {
   int total_pkt_cnt;
-  struct packet **pkts;
+  struct packet *pkts;
   int cur_idx;
 };
 struct pktgen_pcap *pktgen_pcap_create();
 void pktgen_pcap_free(struct pktgen_pcap *p);
+struct packet *pktgen_pcap_get_packet(struct pktgen_pcap *p);
+
+// obtained directly from newer version DPDK
+#define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
+  ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
+      ((mac_addrs)->addr_bytes[2]), ((mac_addrs)->addr_bytes[3]), \
+      ((mac_addrs)->addr_bytes[4]), ((mac_addrs)->addr_bytes[5])
 #endif

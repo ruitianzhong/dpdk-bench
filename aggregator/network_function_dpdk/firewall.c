@@ -99,7 +99,6 @@ struct firewall {
 
   const uint8_t *data_ipv4[MAX_PKT_BURST];
   uint32_t res_ipv4[MAX_PKT_BURST];
-  struct pktgen_pcap *pktgen_pcap;
 };
 
 int parse_ipv4(char *str, int len, uint32_t *ipv4, int *netmask) {
@@ -200,7 +199,7 @@ void read_acl_from_file(char *filename, struct acl_ipv4_rule *rules,
 
 struct firewall *firewall_create() {
   struct firewall *fw;
-
+  printf("\n************ FIREWALL INIT ****************\n\n");
   fw = rte_zmalloc("firewall_ctx", sizeof(struct firewall), 0);
 
   if (NULL == fw) {
@@ -249,8 +248,9 @@ struct firewall *firewall_create() {
   fw->acl_ctx = acx;
   fw->num_rule = 0;
   fw->num_ipv4 = 0;
-  // fw->pktgen_pcap = pktgen_pcap_create();
   // rte_acl_classify(acx, data, results, 1, 4);
+  printf("************ FIREWALL INIT END ****************\n\n");
+
   return fw;
 }
 // From my perspective, category is similar to `namespace`
@@ -261,7 +261,6 @@ void firewall_free(struct firewall *fw) {
   }
 
   rte_acl_free(fw->acl_ctx);
-  // pktgen_pcap_free(fw->pktgen_pcap);
   rte_free(fw);
 }
 
@@ -310,6 +309,8 @@ static void replenish_tx_mbuf(struct thread_context *ctx) {
 }
 
 static void fill_packets(struct thread_context *ctx) {
+  int offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
+               sizeof(struct rte_udp_hdr);
   for (int i = 0; i < MAX_PKT_BURST; i++) {
     struct rte_mbuf *m = ctx->tx_pkts[i];
 
@@ -318,18 +319,17 @@ static void fill_packets(struct thread_context *ctx) {
 
     m->nb_segs = 1;
     m->next = NULL;
-    memcpy(&eth->s_addr, &ctx->eth_addrs[SEND_SIDE],
-           sizeof(struct rte_ether_addr));
-    memcpy(&eth->d_addr, &ctx->eth_addrs[RECEIVE_SIDE],
-           sizeof(struct rte_ether_addr));
-    // just for experiment here
 
+    struct packet *p = pktgen_pcap_get_packet(ctx->send_priv_data);
+
+    memcpy(eth, p->data, offset);
+    // just for experiment here
     eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
+
     uint64_t start = rte_get_tsc_cycles();
 
-    uint64_t *p =
-        rte_pktmbuf_mtod_offset(m, uint64_t *, sizeof(struct rte_ether_hdr));
-    *p = rte_cpu_to_be_64(start);
+    uint64_t *t = rte_pktmbuf_mtod_offset(m, uint64_t *, offset);
+    *t = rte_cpu_to_be_64(start);
   }
 }
 
@@ -338,10 +338,11 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
   uint64_t total = 0;
   static int idx = 0;
   uint64_t end = rte_get_tsc_cycles();
+  int offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
+               sizeof(struct rte_udp_hdr);
   for (int i = 0; i < nb_pkts; i++) {
     struct rte_mbuf *mbuf = rx_pkts[i];
     rte_prefetch0(rte_pktmbuf_mtod(mbuf, void *));
-    int offset = sizeof(struct rte_ether_hdr);
     if (unlikely(mbuf->data_len <= offset)) {
       rte_panic("unexpected data_len: %d\n", mbuf->data_len);
     }
@@ -473,17 +474,27 @@ static void firewall_receiver(thread_context_t *ctx) {
          8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
 }
 
-static void init_firewall_app(struct thread_context *ctx) {
-  ctx->private_data = firewall_create();
+static void init_firewall_recv(struct thread_context *ctx) {
+  ctx->recv_priv_data = firewall_create();
 }
 
-static void free_firewall_app(struct thread_context *ctx) {
-  firewall_free((struct firewall *)ctx->private_data);
+static void free_firewall_recv(struct thread_context *ctx) {
+  firewall_free((struct firewall *)ctx->recv_priv_data);
+}
+
+static void init_firewall_send(struct thread_context *ctx) {
+  ctx->send_priv_data = pktgen_pcap_create();
+}
+
+static void free_firewall_send(struct thread_context *ctx) {
+  pktgen_pcap_free((struct pktgen_pcap *)(ctx->send_priv_data));
 }
 
 struct dpdk_app firewall_app = {
     .receive = firewall_receiver,
     .send = firewall_sender,
-    .init = init_firewall_app,
-    .free = free_firewall_app,
+    .send_init = init_firewall_send,
+    .send_free = free_firewall_send,
+    .recv_free = free_firewall_recv,
+    .recv_init = init_firewall_recv,
 };

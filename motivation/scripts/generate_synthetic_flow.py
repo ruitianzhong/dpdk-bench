@@ -8,8 +8,8 @@ from scapy.layers.http import HTTPRequest, HTTP
 from scapy.layers.l2 import Ether
 from scapy.utils import wrpcap
 
-SRC_MAC = "bd:00:00:00:10:42"
-DST_MAC = "bd:00:00:00:10:47"
+SRC_MAC = "6C:B3:11:50:D3:DA"
+DST_MAC = "3C:FD:FE:EC:48:11"
 
 
 def generate_random_ip():

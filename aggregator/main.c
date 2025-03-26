@@ -18,7 +18,6 @@
 #define HASH_ENTRIES 2048
 #include <stdlib.h>
 
-static uint64_t timer_period = 10;
 #include "aggregator.h"
 
 // Descriptor
@@ -47,14 +46,9 @@ static uint8_t key[] = {
 static struct dpdk_app *app = NULL;
 
 struct config CONFIG = {
-    .pcap_file_name = NULL,
+    .pcap_file_name = "synthetic_slf1_flow_num1_count1_seed42.pcap",
 };
 
-// obtained directly from newer version DPDK
-#define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
-  ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
-      ((mac_addrs)->addr_bytes[2]), ((mac_addrs)->addr_bytes[3]), \
-      ((mac_addrs)->addr_bytes[4]), ((mac_addrs)->addr_bytes[5])
 static struct rte_eth_conf port_conf = {
     .txmode =
         {
@@ -190,8 +184,6 @@ int main(int argc, char **argv) {
   argc -= ret;
   argv += ret;
 
-  timer_period = timer_period * rte_get_timer_hz();
-
   nb_ports = rte_eth_dev_count_avail();
 
   if (nb_ports == 0) {
@@ -221,8 +213,12 @@ int main(int argc, char **argv) {
 
     char name[64];
 
-    if (app->init != NULL) {
-      app->init(ctx);
+    if (app->send_init != NULL && core_id % 2 == SEND_SIDE) {
+      app->send_init(ctx);
+    }
+
+    if (app->recv_init != NULL && core_id % 2 == RECEIVE_SIDE) {
+      app->recv_init(ctx);
     }
 
     sprintf(name, "mbuf_pool_%d", core_id);
@@ -333,7 +329,6 @@ int main(int argc, char **argv) {
 
     nb_port++;
   }
-
   check_all_ports_link_status(2);
 
   // rte_eth_stats_reset(0);
@@ -350,8 +345,16 @@ int main(int argc, char **argv) {
     if (rte_eal_wait_lcore(lcore_id) < 0) {
       printf("Non zero return\n");
     }
-    if (app->free != NULL) {
-      app->free(&thread_ctxs[lcore_id]);
+
+    if (lcore_id >= 2) {
+      continue;
+    }
+  
+    if (app->send_free != NULL && lcore_id % 2 == SEND_SIDE) {
+      app->send_free(&thread_ctxs[lcore_id]);
+    }
+    if (app->recv_free != NULL && lcore_id % 2 == RECEIVE_SIDE) {
+      app->recv_free(&thread_ctxs[lcore_id]);
     }
   }
   end = rte_get_tsc_cycles();
