@@ -18,7 +18,7 @@ int check_if_ipv4(struct rte_mbuf *mbuf) {
   struct rte_ipv4_hdr *ipv4 = rte_pktmbuf_mtod_offset(
       mbuf, struct rte_ipv4_hdr *, sizeof(struct rte_ether_hdr));
 
-  if (ipv4->next_proto_id != IPPROTO_TCP ||
+  if (ipv4->next_proto_id != IPPROTO_TCP &&
       ipv4->next_proto_id != IPPROTO_UDP) {
     return 0;
   }

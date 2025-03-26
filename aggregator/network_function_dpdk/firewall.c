@@ -265,23 +265,24 @@ void firewall_free(struct firewall *fw) {
 }
 
 static inline uint8_t *get_ipv4_next_proto_ptr(uint8_t *data) {
-  return data + sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
+  return data + sizeof(struct rte_ether_hdr) +
          offsetof(struct rte_ipv4_hdr, next_proto_id);
 }
 
-static int process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
-                                size_t length) {
+static void process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
+                                 size_t length) {
   if (length > MAX_PKT_BURST) {
     rte_panic("len=%ld\n", length);
   }
+  if (length == 0) {
+    return;
+  }
   fw->num_ipv4 = 0;
-  int n = 0;
   for (int i = 0; i < length; i++) {
     if (check_if_ipv4(bufs[i])) {
       uint8_t *ptr = rte_pktmbuf_mtod(bufs[i], uint8_t *);
       fw->types[i] = PACKET_IPV4;
       fw->data_ipv4[fw->num_ipv4++] = get_ipv4_next_proto_ptr(ptr);
-      n++;
     } else {
       fw->types[i] = PACKET_OTHER;
     }
@@ -462,7 +463,7 @@ static void firewall_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-
+    process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
     echo_back(ctx->rx_pkts, ret);
 
     send_all(ctx, ctx->rx_pkts, ret);
