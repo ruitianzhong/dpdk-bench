@@ -372,11 +372,11 @@ static void firewall_sender(thread_context_t *ctx) {
   uint64_t start, end;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
-  while (cnt < TOTAL_PACKET_COUNT) {
+  while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
-    if (inflight_packet < MAX_INFLIGHT_PACKET) {
+    if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
       // if (difftsc > drain_tsc) {
       fill_packets(ctx);
 

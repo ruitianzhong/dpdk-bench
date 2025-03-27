@@ -93,7 +93,65 @@ static void nat_free(struct nat *nat) {
 }
 
 static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
-                                 size_t length) {}
+                                 size_t length) {
+  for (int i = 0; i < length; i++) {
+    struct rte_mbuf *m = bufs[i];
+    if (!check_if_ipv4(m)) {
+      continue;
+    }
+    struct rte_udp_hdr *udp;
+    struct rte_ipv4_hdr *ipv4;
+    struct ipv4_5tuple lan2wan, wan2lan;
+
+    udp = rte_pktmbuf_mtod_offset(
+        m, struct rte_udp_hdr *,
+        sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
+
+    ipv4 = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr *,
+                                   sizeof(struct rte_ether_hdr));
+
+    lan2wan.ip_dst = ipv4->dst_addr;
+    lan2wan.ip_src = ipv4->src_addr;
+    lan2wan.port_src = udp->src_port;
+    lan2wan.port_dst = udp->dst_port;
+    lan2wan.proto = ipv4->next_proto_id;
+
+    int ret = rte_hash_lookup(nat->lan2wan, &lan2wan);
+    struct lan2wan_entry *entry = NULL;
+
+    if (ret < 0) {
+      ret = rte_hash_add_key(nat->lan2wan, &lan2wan);
+
+      entry = &nat->l2w_entries[ret];
+
+      if (nat->current_port == 65535) {
+        rte_panic("Not enough port\n");
+      }
+
+      entry->src_port = rte_cpu_to_be_16(nat->current_port);
+      entry->src_ip = RTE_IPV4(127, 0, 0, 1);
+
+      wan2lan.ip_dst = RTE_IPV4(127, 0, 0, 1);
+      wan2lan.ip_src = ipv4->dst_addr;
+      wan2lan.port_src = udp->dst_port;
+      wan2lan.port_dst = rte_cpu_to_be_16(nat->current_port);
+      wan2lan.proto = ipv4->next_proto_id;
+
+      ret = rte_hash_add_key(nat->wan2lan, &wan2lan);
+      struct wan2lan_entry *w2l_e = &nat->w2l_entries[ret];
+
+      w2l_e->dst_ip = ipv4->src_addr;
+      w2l_e->dst_port = udp->src_port;
+
+      nat->current_port++;
+    } else {
+      entry = &nat->l2w_entries[ret];
+    }
+
+    udp->src_port = entry->src_port;
+    ipv4->src_addr = entry->src_ip;
+  }
+}
 /*
   Code obtained from one_way
 */
@@ -173,11 +231,11 @@ static void nat_sender(thread_context_t *ctx) {
   uint64_t start, end;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
-  while (cnt < TOTAL_PACKET_COUNT) {
+  while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
-    if (inflight_packet < MAX_INFLIGHT_PACKET) {
+    if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
       // if (difftsc > drain_tsc) {
       fill_packets(ctx);
 

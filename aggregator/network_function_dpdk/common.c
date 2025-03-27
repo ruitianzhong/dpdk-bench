@@ -40,3 +40,25 @@ void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
     remain -= ret;
   } while (remain > 0);
 }
+// For debug only not used in the data path
+void print_ipv4_udp_info(void *ctx, struct rte_mbuf **mbufs, int length) {
+  for (int i = 0; i < length; i++) {
+    struct rte_mbuf *m = mbufs[i];
+    struct rte_udp_hdr *udp = rte_pktmbuf_mtod_offset(
+        m, struct rte_udp_hdr *,
+        sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
+    struct rte_ipv4_hdr *ipv4 = rte_pktmbuf_mtod_offset(
+        m, struct rte_ipv4_hdr *, sizeof(struct rte_ether_hdr));
+
+    struct in_addr ip_addr;
+
+    ip_addr.s_addr = rte_be_to_cpu_32(ipv4->src_addr);
+
+    printf("src IP Address: %s Port:%d ", inet_ntoa(ip_addr),
+           rte_be_to_cpu_16(udp->src_port));
+
+    ip_addr.s_addr = rte_be_to_cpu_32(ipv4->dst_addr);
+    printf("dst IP Address: %s Port:%d\n", inet_ntoa(ip_addr),
+           rte_be_to_cpu_16(udp->dst_port));
+  }
+}

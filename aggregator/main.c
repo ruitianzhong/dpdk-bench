@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
-  app =&one_way_app;
+  app = &nat_app;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
   // adjust cmdline parameters

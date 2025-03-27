@@ -24,7 +24,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1000000)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1)
 #define QUEUE_PER_PORT 1
 
 TAILQ_HEAD(packet_head, packet);
@@ -110,6 +110,7 @@ struct pktgen_pcap {
 struct pktgen_pcap *pktgen_pcap_create();
 void pktgen_pcap_free(struct pktgen_pcap *p);
 struct packet *pktgen_pcap_get_packet(struct pktgen_pcap *p);
+void print_ipv4_udp_info(void *ctx, struct rte_mbuf **mbufs, int length);
 
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
