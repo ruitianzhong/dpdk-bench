@@ -22,11 +22,11 @@
 
 // Descriptor
 // It need to be adjusted carefully to avoid packet drop
-#define RX_DESC_DEFAULT 1024
-#define TX_DESC_DEFAULT 1024
+#define RX_DESC_DEFAULT 4096
+#define TX_DESC_DEFAULT 4096
 static uint16_t nb_rxd = RX_DESC_DEFAULT;
 static uint16_t nb_txd = TX_DESC_DEFAULT;
-static int packet_size = 1000;
+static int packet_size = 1500;
 // TODO: max_queue, rss_key setup
 struct thread_context thread_ctxs[RTE_MAX_LCORE];
 
@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
-  app = &firewall_app;
+  app =&one_way_app;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
   // adjust cmdline parameters

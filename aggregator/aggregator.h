@@ -24,7 +24,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1000000)
 #define QUEUE_PER_PORT 1
 
 TAILQ_HEAD(packet_head, packet);
@@ -95,6 +95,7 @@ enum {
 extern struct dpdk_app one_way_app;
 extern struct dpdk_app echo_app;
 extern struct dpdk_app firewall_app;
+extern struct dpdk_app nat_app;
 
 struct config {
   char *pcap_file_name;

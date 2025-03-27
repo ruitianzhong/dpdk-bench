@@ -20,7 +20,6 @@
 #include <sys/queue.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
-#define HASH_ENTRIES 2048
 #include <rte_malloc.h>
 #include <rte_memory.h>
 #include <stddef.h>

@@ -1,8 +1,104 @@
-// server echo back what the client send
+#include <errno.h>
+#include <rte_debug.h>
+#include <rte_eal.h>
+#include <rte_ethdev.h>
+#include <rte_ether.h>
+#include <rte_hash.h>
+#include <rte_hash_crc.h>
+#include <rte_ip.h>
+#include <rte_launch.h>
+#include <rte_lcore.h>
+#include <rte_memory.h>
+#include <rte_mempool.h>
+#include <rte_per_lcore.h>
+#include <rte_spinlock.h>
+#include <rte_tcp.h>
+#include <rte_udp.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/queue.h>
+
+#define DEFAULT_HASH_FUNC rte_hash_crc
+#define HASH_ENTRIES 2048
+#include <rte_acl.h>
+#include <rte_memory.h>
+#include <stddef.h>
+#include <stdio.h>
 
 #include "../aggregator.h"
+#include "../util.h"
+// ACL reference
+// https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
+#define MAX_ACL_RULES 20000
+#define MAX_LINE_CHARACTER 64
+#define MAX_RULE_NUM 30000
 
-#define BURST_TX_DRAIN_US 23
+#define MAX_NAT_FLOW_NUM 65535
+
+// From my perspective, category is similar to `namespace`
+
+struct lan2wan_entry{
+    uint32_t src_ip;
+    uint16_t src_port;
+};
+
+struct wan2lan_entry{
+    uint32_t dst_ip;
+    uint16_t dst_port;
+};
+
+struct nat {
+  uint16_t current_port;
+  struct rte_hash *lan2wan;
+  struct rte_hash *wan2lan;
+  struct lan2wan_entry l2w_entries[MAX_NAT_FLOW_NUM];
+  struct wan2lan_entry w2l_entries[MAX_NAT_FLOW_NUM];
+};
+
+static struct nat *nat_create() {
+  struct nat *nat = calloc(1, sizeof(struct nat));
+  if (nat == NULL) {
+    rte_exit(EXIT_FAILURE, "failed to allocate mem @%s\n", __func__);
+  }
+
+  struct rte_hash_parameters param = {
+      .entries = MAX_NAT_FLOW_NUM,
+      .hash_func = rte_hash_crc,
+      .key_len = sizeof(struct ipv4_5tuple),
+      .socket_id = rte_socket_id(),
+      .hash_func_init_val = 0,
+  };
+
+  param.name = "lan2wan";
+  nat->lan2wan = rte_hash_create(&param);
+  if (nat->lan2wan == NULL) {
+    rte_exit(EXIT_FAILURE, "failed to allocate lan2wan\n");
+  }
+
+  param.name = "wan2lan";
+  nat->wan2lan = rte_hash_create(&param);
+  if (nat->wan2lan == NULL) {
+    rte_exit(EXIT_FAILURE, "failed to allocate wan2lan\n");
+  }
+  nat->current_port = 1024;
+  return nat;
+}
+
+static void nat_free(struct nat *nat) {
+  rte_hash_free(nat->lan2wan);
+  rte_hash_free(nat->wan2lan);
+
+  free(nat);
+}
+
+static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
+                                 size_t length) {}
+/*
+  Code obtained from one_way
+*/
+
+#define BURST_TX_DRAIN_US 46
 #define MAX_INFLIGHT_PACKET (256 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
@@ -15,6 +111,8 @@ static void replenish_tx_mbuf(struct thread_context *ctx) {
 }
 
 static void fill_packets(struct thread_context *ctx) {
+  int offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
+               sizeof(struct rte_udp_hdr);
   for (int i = 0; i < MAX_PKT_BURST; i++) {
     struct rte_mbuf *m = ctx->tx_pkts[i];
 
@@ -23,18 +121,17 @@ static void fill_packets(struct thread_context *ctx) {
 
     m->nb_segs = 1;
     m->next = NULL;
-    memcpy(&eth->s_addr, &ctx->eth_addrs[SEND_SIDE],
-           sizeof(struct rte_ether_addr));
-    memcpy(&eth->d_addr, &ctx->eth_addrs[RECEIVE_SIDE],
-           sizeof(struct rte_ether_addr));
-    // just for experiment here
 
+    struct packet *p = pktgen_pcap_get_packet(ctx->send_priv_data);
+
+    memcpy(eth, p->data, offset);
+    // just for experiment here
     eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
+
     uint64_t start = rte_get_tsc_cycles();
 
-    uint64_t *p =
-        rte_pktmbuf_mtod_offset(m, uint64_t *, sizeof(struct rte_ether_hdr));
-    *p = rte_cpu_to_be_64(start);
+    uint64_t *t = rte_pktmbuf_mtod_offset(m, uint64_t *, offset);
+    *t = rte_cpu_to_be_64(start);
   }
 }
 
@@ -43,10 +140,11 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
   uint64_t total = 0;
   static int idx = 0;
   uint64_t end = rte_get_tsc_cycles();
+  int offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
+               sizeof(struct rte_udp_hdr);
   for (int i = 0; i < nb_pkts; i++) {
     struct rte_mbuf *mbuf = rx_pkts[i];
     rte_prefetch0(rte_pktmbuf_mtod(mbuf, void *));
-    int offset = sizeof(struct rte_ether_hdr);
     if (unlikely(mbuf->data_len <= offset)) {
       rte_panic("unexpected data_len: %d\n", mbuf->data_len);
     }
@@ -60,7 +158,7 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
   return total;
 }
 
-static void echo_sender(thread_context_t *ctx) {
+static void nat_sender(thread_context_t *ctx) {
   uint16_t lcore_id = rte_lcore_id();
 
   int cnt = 0;
@@ -133,7 +231,7 @@ static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
   }
 }
 
-static void echo_receiver(thread_context_t *ctx) {
+static void nat_receiver(thread_context_t *ctx) {
   int lcore_id = rte_lcore_id();
   printf("server side lcore:%d port_id=%d queue_id=%d\n", lcore_id,
          ctx->port_id, ctx->queue_id);
@@ -166,7 +264,7 @@ static void echo_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-
+    process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts, ret);
     echo_back(ctx->rx_pkts, ret);
 
     send_all(ctx, ctx->rx_pkts, ret);
@@ -177,7 +275,28 @@ static void echo_receiver(thread_context_t *ctx) {
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
          8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
 }
-struct dpdk_app echo_app = {
-    .receive = echo_receiver,
-    .send = echo_sender,
+
+static void init_nat_recv(struct thread_context *ctx) {
+  ctx->recv_priv_data = nat_create();
+}
+
+static void free_nat_recv(struct thread_context *ctx) {
+  nat_free((struct nat *)ctx->recv_priv_data);
+}
+
+static void init_nat_send(struct thread_context *ctx) {
+  ctx->send_priv_data = pktgen_pcap_create();
+}
+
+static void free_nat_send(struct thread_context *ctx) {
+  pktgen_pcap_free((struct pktgen_pcap *)(ctx->send_priv_data));
+}
+
+struct dpdk_app nat_app = {
+    .receive = nat_receiver,
+    .send = nat_sender,
+    .send_init = init_nat_send,
+    .send_free = free_nat_send,
+    .recv_free = free_nat_recv,
+    .recv_init = init_nat_recv,
 };
