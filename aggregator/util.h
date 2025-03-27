@@ -7,9 +7,6 @@ struct packet
 {
     uint8_t *data;
     size_t len;
-    struct rte_mbuf *mbuf;
-    TAILQ_ENTRY(packet)
-    tailq;
 };
 
 struct __attribute__((packed)) ipv4_5tuple {

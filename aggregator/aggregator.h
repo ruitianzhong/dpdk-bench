@@ -27,14 +27,26 @@
 #define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1)
 #define QUEUE_PER_PORT 1
 
-TAILQ_HEAD(packet_head, packet);
+struct packet_mbuf {
+  struct rte_mbuf *mbuf;
+  TAILQ_ENTRY(packet_mbuf)
+  tailq;
+};
+
+
+TAILQ_HEAD(packet_head, packet_mbuf);
 TAILQ_HEAD(flow_entry_head, flow_entry);
+
+struct packet_mbuf_mempool {
+  struct packet_head head;
+  struct packet_mbuf *pool;
+};
+
 struct flow_entry {
   uint64_t created_tsc;
   int total_byte_count;
 
   int pkt_cnt;
-  struct packet *pkts[MAX_AGGREGATE_PER_FLOW];
   int nb_max_per_flow_batch_size;
   struct packet_head head;
   TAILQ_ENTRY(flow_entry)
@@ -55,6 +67,8 @@ struct aggregator {
   int flow_burst_max;
 
   uint64_t buffer_time_us;
+
+  struct packet_mbuf_mempool *pool;
 };
 
 #define _NF_COMMON
