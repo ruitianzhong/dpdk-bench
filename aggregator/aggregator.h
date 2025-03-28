@@ -126,6 +126,12 @@ void pktgen_pcap_free(struct pktgen_pcap *p);
 struct packet *pktgen_pcap_get_packet(struct pktgen_pcap *p);
 void print_ipv4_udp_info(void *ctx, struct rte_mbuf **mbufs, int length);
 
+struct aggregator *aggregator_create();
+void aggregator_free(struct aggregator *agg);
+void aggregator_schedule(struct aggregator *agg);
+struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
+                                          struct rte_mbuf *pkt);
+extern struct config CONFIG;
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \

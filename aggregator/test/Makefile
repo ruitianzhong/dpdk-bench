@@ -1,14 +1,11 @@
-# Based on Makefile in dpdk source code.
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright(c) 2010-2014 Intel Corporation
 
 # binary name
-APP = back2back
+APP = helloworld
 
 # all source are stored in SRCS-y
-SRCS-y := main.c network_function_dpdk/two_way.c network_function_dpdk/one_way.c network_function_dpdk/firewall.c \
- network_function_dpdk/common.c network_function_dpdk/pkt_gen.c \
-  network_function_dpdk/nat.c aggregator.c config.c
-HEADERS := aggregator.h
-PCAP_LIBS := -lpcap
+SRCS-y := aggregator_test.c ../aggregator.c ../network_function_dpdk/pkt_gen.c ../config.c ../network_function_dpdk/common.c
 
 PKGCONF ?= pkg-config
 
@@ -39,11 +36,11 @@ endif
 
 CFLAGS += -DALLOW_EXPERIMENTAL_API
 
-build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) ${HEADERS} | build
-	$(CC) $(CFLAGS) $(SRCS-y) -o $@ $(LDFLAGS) $(LDFLAGS_SHARED) $(PCAP_LIBS)
+build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) | build
+	$(CC) $(CFLAGS) $(SRCS-y) -o $@ $(LDFLAGS) $(LDFLAGS_SHARED) -lpcap
 
 build/$(APP)-static: $(SRCS-y) Makefile $(PC_FILE) | build
-	$(CC) $(CFLAGS) $(SRCS-y) -o $@ $(LDFLAGS) $(LDFLAGS_STATIC)
+	$(CC) $(CFLAGS) $(SRCS-y) -o $@ $(LDFLAGS) $(LDFLAGS_STATIC) -lpcap
 
 build:
 	@mkdir -p $@

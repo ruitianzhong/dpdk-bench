@@ -48,6 +48,7 @@ struct packet_mbuf_mempool *packet_mbuf_mempool_create() {
     struct packet_mbuf *pkt = &pool->pool[i];
     TAILQ_INSERT_HEAD(&pool->head, pkt, tailq);
   }
+  return pool;
 }
 
 struct packet_mbuf *packet_mbuf_get(struct packet_mbuf_mempool *pool) {
@@ -179,11 +180,14 @@ uint16_t aggregator_rx_burst(struct aggregator *agg, uint16_t port_id,
   return cnt;
 }
 
-void schedule(struct aggregator *agg, uint64_t cur_tsc) {
+void aggregator_schedule(struct aggregator *agg) {
+  uint64_t cur_tsc = rte_get_tsc_cycles();
   while (!TAILQ_EMPTY(&agg->flow_list)) {
     struct flow_entry *fe = TAILQ_FIRST(&agg->flow_list);
+    uint64_t interval_us =
+        (cur_tsc - fe->created_tsc) * 1000 * 1000 / rte_get_timer_hz();
     // TODO: calculate the exact time here
-    if (cur_tsc - fe->created_tsc >= agg->buffer_time_us) {
+    if (interval_us >= agg->buffer_time_us) {
       // get batch
       TAILQ_CONCAT(&agg->ready_queue, &fe->head, tailq);
       TAILQ_REMOVE(&agg->flow_list, fe, tailq);
@@ -211,9 +215,9 @@ struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
   }
 
   struct rte_ipv4_hdr *ipv4 =
-      (struct rte_ipv4_hdr *)(data + sizeof(struct rte_ether_addr));
+      (struct rte_ipv4_hdr *)(data + sizeof(struct rte_ether_hdr));
 
-  if (ipv4->next_proto_id != IPPROTO_TCP ||
+  if (ipv4->next_proto_id != IPPROTO_TCP &&
       ipv4->next_proto_id != IPPROTO_UDP) {
     return pkt;
   }

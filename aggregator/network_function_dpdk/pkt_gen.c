@@ -73,7 +73,7 @@ void pktgen_pcap_free(struct pktgen_pcap *p) {
   if (p == NULL) {
     rte_panic("NULL pointer!\n");
   }
-  for(int i=0;i<p->total_pkt_cnt;i++){
+  for (int i = 0; i < p->total_pkt_cnt; i++) {
     free(p->pkts[i].data);
   }
   free(p->pkts);

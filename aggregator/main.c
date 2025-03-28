@@ -45,10 +45,6 @@ static uint8_t key[] = {
 
 static struct dpdk_app *app = NULL;
 
-struct config CONFIG = {
-    .pcap_file_name = "synthetic_slf1_flow_num1_count1_seed42.pcap",
-};
-
 static struct rte_eth_conf port_conf = {
     .txmode =
         {
