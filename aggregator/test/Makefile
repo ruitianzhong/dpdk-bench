@@ -1,8 +1,5 @@
-# SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2010-2014 Intel Corporation
-
 # binary name
-APP = helloworld
+APP = aggregator_test
 
 # all source are stored in SRCS-y
 SRCS-y := aggregator_test.c ../aggregator.c ../network_function_dpdk/pkt_gen.c ../config.c ../network_function_dpdk/common.c

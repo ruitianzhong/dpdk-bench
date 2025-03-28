@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/queue.h>
-
+/*
+  Unit test for aggregator module
+*/
 static void fill_packet(struct pktgen_pcap* pktgen, struct rte_mbuf* m) {
   struct packet* p = pktgen_pcap_get_packet(pktgen);
   assert(p != NULL);
@@ -77,7 +79,6 @@ static void multi_flow_test(int batch_size, int flow_num) {
   assert(mp != NULL);
 
   inject_packet(batch_size * flow_num, pktgen, mp, agg);
-  printf("\n\n");
 
   rte_delay_us(20);
   aggregator_schedule(agg);
@@ -100,7 +101,6 @@ static void multi_flow_test(int batch_size, int flow_num) {
     }
   }
 
-  printf("test done!\n");
   // tear down allocated resource
   aggregator_free(agg);
 
@@ -158,12 +158,20 @@ int main(int argc, char** argv) {
   single_flow_test();
 
   CONFIG.pcap_file_name = "./pcap/synthetic_slf1_flow_num2_count1_seed42.pcap";
-  multi_flow_test(2, 2);
-  multi_flow_test(3, 2);
+  for (int i = 1; i < MAX_AGGREGATE_PER_FLOW; i++) {
+    multi_flow_test(i, 2);
+  }
 
   CONFIG.pcap_file_name = "./pcap/synthetic_slf1_flow_num3_count1_seed42.pcap";
+  for (int i = 1; i < MAX_AGGREGATE_PER_FLOW; i++) {
+    multi_flow_test(i, 3);
+  }
 
-  multi_flow_test(2, 3);
+  CONFIG.pcap_file_name =
+      "./pcap/synthetic_slf1_flow_num2000_count1_seed42.pcap";
+  for (int i = 1; i < MAX_AGGREGATE_PER_FLOW && i < 4; i++) {
+    multi_flow_test(i, 2000);
+  }
 
   rte_eal_cleanup();
   return 0;
