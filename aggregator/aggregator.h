@@ -47,7 +47,7 @@ struct flow_entry {
   int total_byte_count;
 
   int pkt_cnt;
-  int nb_max_per_flow_batch_size;
+  struct ipv4_5tuple tuple;
   struct packet_head head;
   TAILQ_ENTRY(flow_entry)
   tailq;
@@ -132,6 +132,7 @@ void aggregator_schedule(struct aggregator *agg);
 struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
                                           struct rte_mbuf *pkt);
 extern struct config CONFIG;
+struct rte_mbuf *aggregator_get_packet_from_ready_queue(struct aggregator *agg);
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \

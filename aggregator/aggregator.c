@@ -126,17 +126,16 @@ err:
   return NULL;
 }
 
-struct rte_mbuf *get_packet_from_ready_queue(struct aggregator *agg) {
-  struct rte_mbuf *m = NULL;
-
+struct rte_mbuf *aggregator_get_packet_from_ready_queue(
+    struct aggregator *agg) {
   if (TAILQ_EMPTY(&agg->ready_queue)) {
-    return m;
+    return NULL;
   }
   struct packet_mbuf *pm = TAILQ_FIRST(&agg->ready_queue);
 
   TAILQ_REMOVE(&agg->ready_queue, pm, tailq);
-
-  return m;
+  packet_mbuf_put(agg->pool, pm);
+  return pm->mbuf;
 }
 
 void aggregator_free(struct aggregator *agg) {
@@ -170,7 +169,7 @@ uint16_t aggregator_rx_burst(struct aggregator *agg, uint16_t port_id,
   }
   m = NULL;
   while (cnt < nb_pkts) {
-    m = get_packet_from_ready_queue(agg);
+    m = aggregator_get_packet_from_ready_queue(agg);
     if (m == NULL) {
       break;
     }
@@ -191,6 +190,8 @@ void aggregator_schedule(struct aggregator *agg) {
       // get batch
       TAILQ_CONCAT(&agg->ready_queue, &fe->head, tailq);
       TAILQ_REMOVE(&agg->flow_list, fe, tailq);
+      // it's important to delete key here
+      rte_hash_del_key(agg->cucko_hashtable, &fe->tuple);
     } else {
       break;
     }
@@ -272,17 +273,17 @@ struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
     fe->pkt_cnt = 1;
     fe->created_tsc = rte_get_tsc_cycles();
     fe->total_byte_count = pm->mbuf->data_len;
-
+    fe->tuple = tuple;
     return NULL;
   }
   struct flow_entry *e = &agg->entries[ret];
   TAILQ_INSERT_TAIL(&e->head, pm, tailq);
   e->pkt_cnt++;
-
   if (e->pkt_cnt == agg->flow_burst_max) {
     TAILQ_CONCAT(&agg->ready_queue, &e->head, tailq);
     TAILQ_REMOVE(&agg->flow_list, e, tailq);
     rte_hash_del_key(agg->cucko_hashtable, &tuple);
+
     e->pkt_cnt = 0;
   }
   e->total_byte_count += pkt->data_len;
