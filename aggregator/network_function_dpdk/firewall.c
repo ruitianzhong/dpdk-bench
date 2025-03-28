@@ -20,7 +20,6 @@
 #include <sys/queue.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
-#define HASH_ENTRIES 2048
 #include <rte_acl.h>
 #include <rte_memory.h>
 #include <stddef.h>
@@ -30,9 +29,8 @@
 #include "../util.h"
 // ACL reference
 // https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
-#define MAX_ACL_RULES 20000
+#define MAX_ACL_RULES 30000
 #define MAX_LINE_CHARACTER 64
-#define MAX_RULE_NUM 30000
 
 enum { FIREWALL_ALLOW };
 
