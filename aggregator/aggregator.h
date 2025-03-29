@@ -113,6 +113,7 @@ extern struct dpdk_app nat_app;
 
 struct config {
   char *pcap_file_name;
+  char *fw_rules_file_name;
 };
 extern struct config CONFIG;
 

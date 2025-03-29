@@ -26,6 +26,7 @@
 #include <stdio.h>
 
 #include "../aggregator.h"
+#include "../dpdk_app.h"
 #include "../util.h"
 // ACL reference
 // https://doc.dpdk.org/guides/prog_guide/packet_classif_access_ctrl.html
@@ -85,19 +86,6 @@ struct rte_acl_field_def ipv4_defs[5] = {
 };
 
 RTE_ACL_RULE_DEF(acl_ipv4_rule, RTE_DIM(ipv4_defs));
-
-struct firewall {
-  struct rte_acl_ctx *acl_ctx;
-
-  // used for rte_acl_
-  uint32_t num_ipv4;
-  uint32_t num_rule;
-
-  uint8_t types[MAX_PKT_BURST];
-
-  const uint8_t *data_ipv4[MAX_PKT_BURST];
-  uint32_t res_ipv4[MAX_PKT_BURST];
-};
 
 int parse_ipv4(char *str, int len, uint32_t *ipv4, int *netmask) {
   int mask;
@@ -221,7 +209,7 @@ struct firewall *firewall_create() {
     rte_panic("not enough memory");
   }
 
-  read_acl_from_file("fw.rules", acl_rules, MAX_ACL_RULES, fw);
+  read_acl_from_file(CONFIG.fw_rules_file_name, acl_rules, MAX_ACL_RULES, fw);
 
   if ((acx = rte_acl_create(&param)) == NULL) {
     rte_exit(EXIT_FAILURE, "failed to create acl context");
@@ -267,8 +255,8 @@ static inline uint8_t *get_ipv4_next_proto_ptr(uint8_t *data) {
          offsetof(struct rte_ipv4_hdr, next_proto_id);
 }
 
-static void process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
-                                 size_t length) {
+void firewall_process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
+                                   size_t length) {
   if (length > MAX_PKT_BURST) {
     rte_panic("len=%ld\n", length);
   }
@@ -461,7 +449,7 @@ static void firewall_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-    process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
+    firewall_process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
     echo_back(ctx->rx_pkts, ret);
 
     send_all(ctx, ctx->rx_pkts, ret);

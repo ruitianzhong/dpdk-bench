@@ -19,11 +19,14 @@ This script generate both the ACL file and synthetic flow stored in *.pcap
 """
 firewall rules(ACL rules) similar to POM paper
 """
-def generate_fw_rules(filename,src_ips,dst_ips):
-    with open(filename,"w") as f:
-        for ip in src_ips:
+
+
+def generate_fw_rules(filename, src_ips, dst_ips):
+    with open(filename, "w") as f:
+        for ip in dst_ips:
             f.write(ip+"/32\n")
-    pass
+
+
 def get_ip_list(flow_size):
     if flow_size > 40000:
         raise Exception("Too many flow")
@@ -39,13 +42,14 @@ def get_ip_list(flow_size):
                 dst = dst_ip_prefix+str(i)+"."+str(j)
                 src_ips.append(src)
                 dst_ips.append(dst)
-                cnt+=1
-                if cnt==flow_size:
+                cnt += 1
+                if cnt == flow_size:
                     break
-            if cnt==flow_size:
+            if cnt == flow_size:
                 break
-    
+
     return (src_ips, dst_ips)
+
 
 def generate_packets(args):
     cnt = 0
@@ -53,7 +57,7 @@ def generate_packets(args):
     pkt_list = [None] * total_size
     flows_list = [None] * args.flow_num
     src_ips, dst_ips = get_ip_list(args.flow_num)
-    generate_fw_rules(args.fw_rules, src_ips, dst_ips)
+    generate_fw_rules("fw"+str(args.flow_num)+".rules", src_ips, dst_ips)
 
     for flow_idx in range(args.flow_num):
         src_ip = src_ips[flow_idx]
@@ -79,7 +83,6 @@ def generate_packets(args):
     return pkt_list
 
 
-
 def store_packets_to_pcap_file(args, packets_list):
     print("Store the generated packets to synthetic_packets.pcap")
     print(f"Total packets: {len(packets_list)}")
@@ -101,9 +104,6 @@ if __name__ == "__main__":
         "--flow-num", help="total number of flow", type=int, default=100000)
     parser.add_argument(
         "--seed", help="seed for generating random number", type=int, default=42)
-    parser.add_argument(
-        "--fw-rules",help="firewall rules file name",type=str,default="fw.rules"
-    )
     args = parser.parse_args()
     # For reproducible experiments
     random.seed(args.seed)

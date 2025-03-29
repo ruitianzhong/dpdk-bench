@@ -7,7 +7,7 @@ APP = back2back
 SRCS-y := main.c network_function_dpdk/two_way.c network_function_dpdk/one_way.c network_function_dpdk/firewall.c \
  network_function_dpdk/common.c network_function_dpdk/pkt_gen.c \
   network_function_dpdk/nat.c aggregator.c config.c
-HEADERS := aggregator.h
+HEADERS := aggregator.h dpdk_app.h
 PCAP_LIBS := -lpcap
 
 PKGCONF ?= pkg-config
