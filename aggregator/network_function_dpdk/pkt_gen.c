@@ -20,7 +20,8 @@ static void load_packet(struct pktgen_pcap *ctx) {
   char ebuf[PCAP_ERRBUF_SIZE];
   pcap_t *p = pcap_open_offline(CONFIG.pcap_file_name, ebuf);
   if (!p) {
-    rte_exit(EXIT_FAILURE, "pcap_open_offline failed. Reason: %s\n", ebuf);
+    rte_exit(EXIT_FAILURE, "pcap_open_offline failed. Reason: %s filename:%s\n",
+             ebuf, CONFIG.pcap_file_name);
   }
 
   ctx->total_pkt_cnt = calculate_total_packets_in_pcap(p);

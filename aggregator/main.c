@@ -43,8 +43,6 @@ static uint8_t key[] = {
     0x05, 0x05                                                  /* 60 - 8 */
 };
 
-static struct dpdk_app *app = NULL;
-
 static struct rte_eth_conf port_conf = {
     .txmode =
         {
@@ -107,9 +105,9 @@ static int lcore_function(__rte_unused void *dummy) {
     return 0;
   }
   if (lcore_id < QUEUE_PER_PORT) {
-    app->send(&thread_ctxs[lcore_id]);
+    CONFIG.app->send(&thread_ctxs[lcore_id]);
   } else {
-    app->receive(&thread_ctxs[lcore_id]);
+    CONFIG.app->receive(&thread_ctxs[lcore_id]);
   }
   return 0;
 }
@@ -173,12 +171,14 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
-  app = &nat_app;
+  struct dpdk_app *app = NULL;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
   // adjust cmdline parameters
   argc -= ret;
   argv += ret;
+  parse_args(argc, argv);
+  app = CONFIG.app;
 
   nb_ports = rte_eth_dev_count_avail();
 
@@ -345,7 +345,7 @@ int main(int argc, char **argv) {
     if (lcore_id >= 2) {
       continue;
     }
-  
+
     if (app->send_free != NULL && lcore_id % 2 == SEND_SIDE) {
       app->send_free(&thread_ctxs[lcore_id]);
     }
