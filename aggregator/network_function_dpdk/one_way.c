@@ -96,7 +96,7 @@ static void one_way_receiver(thread_context_t *ctx) {
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
 }
 
 struct dpdk_app one_way_app = {

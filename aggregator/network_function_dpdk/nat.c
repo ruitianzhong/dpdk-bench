@@ -41,11 +41,13 @@
 struct lan2wan_entry{
     uint32_t src_ip;
     uint16_t src_port;
+    int cnt;
 };
 
 struct wan2lan_entry{
     uint32_t dst_ip;
     uint16_t dst_port;
+    int cnt;
 };
 
 struct nat {
@@ -130,6 +132,7 @@ static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
 
       entry->src_port = rte_cpu_to_be_16(nat->current_port);
       entry->src_ip = RTE_IPV4(127, 0, 0, 1);
+      entry->cnt = 0;
 
       wan2lan.ip_dst = RTE_IPV4(127, 0, 0, 1);
       wan2lan.ip_src = ipv4->dst_addr;
@@ -146,10 +149,11 @@ static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
       nat->current_port++;
     } else {
       entry = &nat->l2w_entries[ret];
+      entry->cnt++;
     }
 
-    udp->src_port = entry->src_port;
-    ipv4->src_addr = entry->src_ip;
+    // udp->src_port = entry->src_port;
+    // ipv4->src_addr = entry->src_ip;
   }
 }
 /*
@@ -269,7 +273,7 @@ static void nat_sender(thread_context_t *ctx) {
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Sender Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
 }
 
 static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
@@ -302,7 +306,9 @@ static void nat_receiver(thread_context_t *ctx) {
   int ret = -1;
   int loop_cnt = 0;
   uint64_t total_byte_cnt = 0;
+  uint64_t pure_process_time=0,pure_start=0;
   while (cnt < TOTAL_PACKET_COUNT) {
+    pure_start=rte_get_tsc_cycles();
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
@@ -322,16 +328,24 @@ static void nat_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-    process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts, ret);
+    // for (int i = 0; i < 9; i++)
+      process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts,
+                           ret);
+
     echo_back(ctx->rx_pkts, ret);
 
     send_all(ctx, ctx->rx_pkts, ret);
+    pure_process_time += (rte_get_tsc_cycles() - pure_start);
   }
   end = rte_get_tsc_cycles();
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
+  printf("Average per packet processing time:%f\n",
+         1000 * 1000 *
+             ((double)pure_process_time / (double)(rte_get_tsc_hz())) /
+             (double)TOTAL_PACKET_COUNT);
 }
 
 static void init_nat_recv(struct thread_context *ctx) {

@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
 
     for (int i = 0; i < batch; i++) {
       // match result is expected
-      assert(fw->res_ipv4[i] == 1);
+      assert(fw->res_ipv4[i] > 0);
     }
 
     rte_pktmbuf_free_bulk(mbuf, batch);

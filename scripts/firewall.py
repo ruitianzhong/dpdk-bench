@@ -22,6 +22,7 @@ firewall rules(ACL rules) similar to POM paper
 
 
 def generate_fw_rules(filename, src_ips, dst_ips):
+    random.shuffle(dst_ips)
     with open(filename, "w") as f:
         for ip in dst_ips:
             f.write(ip+"/32\n")
@@ -51,12 +52,39 @@ def get_ip_list(flow_size):
     return (src_ips, dst_ips)
 
 
+def get_random_ip_list(flow_size):
+    src_ip_list = []
+    dst_ip_list = []
+    for i in range(flow_size):
+        done = False
+        while not done:
+            a=random.randrange(1,255)
+            b=random.randrange(1,255)
+            c=random.randrange(1,255)
+            d=random.randrange(1,255)
+            ip = str(a)+"."+str(b)+"."+str(c)+"."+str(d)
+            if not dst_ip_list.__contains__(ip):
+                dst_ip_list.append(ip)
+                done= True
+        done = False
+        while not done:
+            a=random.randrange(1,255)
+            b=random.randrange(1,255)
+            c=random.randrange(1,255)
+            d=random.randrange(1,255)
+            ip = str(a)+"."+str(b)+"."+str(c)+"."+str(d)
+            if not dst_ip_list.__contains__(ip) and not src_ip_list.__contains__(ip):
+                src_ip_list.append(ip)
+                done= True
+    assert (len(src_ip_list) == len(dst_ip_list))
+    return (src_ip_list, dst_ip_list)
+
 def generate_packets(args):
     cnt = 0
     total_size = args.flow_num * args.slf
     pkt_list = [None] * total_size
     flows_list = [None] * args.flow_num
-    src_ips, dst_ips = get_ip_list(args.flow_num)
+    src_ips, dst_ips = get_random_ip_list(args.flow_num)
     generate_fw_rules("fw"+str(args.flow_num)+".rules", src_ips, dst_ips)
 
     for flow_idx in range(args.flow_num):

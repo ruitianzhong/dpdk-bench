@@ -3,6 +3,10 @@
 
 #include "aggregator.h"
 
+struct acl_entry {
+  int cnt;
+};
+
 struct firewall {
   struct rte_acl_ctx *acl_ctx;
 
@@ -14,6 +18,8 @@ struct firewall {
 
   const uint8_t *data_ipv4[MAX_PKT_BURST];
   uint32_t res_ipv4[MAX_PKT_BURST];
+
+  struct acl_entry *acl_entries;
 };
 
 struct firewall *firewall_create();

@@ -113,7 +113,7 @@ static void echo_sender(thread_context_t *ctx) {
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Sender Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
 }
 
 static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
@@ -134,6 +134,7 @@ static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
 }
 
 static void echo_receiver(thread_context_t *ctx) {
+  uint64_t empty_poll_cnt = 0;
   int lcore_id = rte_lcore_id();
   printf("server side lcore:%d port_id=%d queue_id=%d\n", lcore_id,
          ctx->port_id, ctx->queue_id);
@@ -145,8 +146,11 @@ static void echo_receiver(thread_context_t *ctx) {
   int cnt = 0;
   int ret = -1;
   int loop_cnt = 0;
+  uint64_t prev_tsc = 0, cur_tsc = 0, total = 0, nonzero_cnt = 0;
   uint64_t total_byte_cnt = 0;
+  uint64_t pure_process_time =0;
   while (cnt < TOTAL_PACKET_COUNT) {
+    uint64_t pure_start = rte_get_tsc_cycles(), pure_end;
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
@@ -154,8 +158,14 @@ static void echo_receiver(thread_context_t *ctx) {
     }
     if (ret == 0) {
       loop_cnt++;
+      empty_poll_cnt++;
     } else {
       loop_cnt = 0;
+      nonzero_cnt++;
+      if (prev_tsc > 0) {
+        total += (rte_get_tsc_cycles() - prev_tsc);
+      }
+      prev_tsc = rte_get_tsc_cycles();
     }
     if (loop_cnt == 100000000) {
       printf("No packet can be received, total_byte_cnt=%ld Exit!\n",
@@ -166,16 +176,25 @@ static void echo_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-
     echo_back(ctx->rx_pkts, ret);
-
+    
     send_all(ctx, ctx->rx_pkts, ret);
+    pure_process_time += (rte_get_tsc_cycles() - pure_start);
+    // rte_delay_us(9);
+
   }
   end = rte_get_tsc_cycles();
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
+  printf("empty poll cnt=%ld non-empty=%ld average_burst_size:%f\n", empty_poll_cnt,nonzero_cnt,
+         (double)TOTAL_PACKET_COUNT / (double)nonzero_cnt);
+  double us_wait = 1000 * 1000 * ((double)total / (double)rte_get_tsc_hz()) /
+                   (double)(nonzero_cnt - 1);
+  printf("time between burst:%f us pure_process_time:%fus\n", us_wait,
+         1000 * 1000 * ((double)pure_process_time / (double)rte_get_tsc_hz()) /
+             (double)TOTAL_PACKET_COUNT);
 }
 struct dpdk_app echo_app = {
     .receive = echo_receiver,

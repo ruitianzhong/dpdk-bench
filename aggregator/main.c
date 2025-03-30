@@ -19,14 +19,14 @@
 #include <stdlib.h>
 
 #include "aggregator.h"
-
+#include "sys/time.h"
 // Descriptor
 // It need to be adjusted carefully to avoid packet drop
 #define RX_DESC_DEFAULT 4096
 #define TX_DESC_DEFAULT 4096
 static uint16_t nb_rxd = RX_DESC_DEFAULT;
 static uint16_t nb_txd = TX_DESC_DEFAULT;
-static int packet_size = 1500;
+static int packet_size = 1000;
 // TODO: max_queue, rss_key setup
 struct thread_context thread_ctxs[RTE_MAX_LCORE];
 
@@ -164,6 +164,12 @@ static void check_all_ports_link_status(uint8_t port_num) {
   }
 }
 
+static uint64_t get_time(struct timeval end,struct timeval start){
+  uint64_t sec = end.tv_sec-start.tv_sec;
+  uint64_t us = end.tv_usec = start.tv_usec;
+  
+  return us + sec * 1000 * 1000;
+}
 /* Initialization of Environment Abstraction Layer (EAL). 8< */
 int main(int argc, char **argv) {
   int ret, nb_ports;
@@ -171,6 +177,8 @@ int main(int argc, char **argv) {
   unsigned int nb_mbufs;
   uint16_t portid;
   uint64_t start, end;
+   // pitfall in rte_eal_remote_launch?
+   start = rte_get_tsc_cycles();
   struct dpdk_app *app = NULL;
   ret = rte_eal_init(argc, argv);
   if (ret < 0) rte_panic("Invalid EAL arguments\n");
@@ -333,8 +341,6 @@ int main(int argc, char **argv) {
   print_eth_stat(0);
   print_eth_stat(1);
 
-  // pitfall in rte_eal_remote_launch?
-  start = rte_get_tsc_cycles();
   rte_eal_mp_remote_launch(lcore_function, NULL, CALL_MAIN);
 
   RTE_LCORE_FOREACH_WORKER(lcore_id) {

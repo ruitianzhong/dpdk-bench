@@ -161,7 +161,9 @@ void read_acl_from_file(char *filename, struct acl_ipv4_rule *rules,
     }
 
     struct acl_ipv4_rule rule = {
-        .data = {.userdata = 1, .category_mask = 1, .priority = 1},
+        .data = {.userdata = fw->num_rule + 1,
+                 .category_mask = 1,
+                 .priority = 1},
         .field[2] =
             {
                 .value.u32 = ipv4_addr,
@@ -234,7 +236,14 @@ struct firewall *firewall_create() {
   fw->acl_ctx = acx;
   fw->num_rule = 0;
   fw->num_ipv4 = 0;
+  fw->acl_entries =
+      rte_zmalloc("acl_entries", sizeof(struct acl_entry) * MAX_ACL_RULES, 0);
+  if (fw->acl_entries == NULL) {
+    rte_panic("can not allocate acl entries\n");
+  }
   // rte_acl_classify(acx, data, results, 1, 4);
+  rte_free(acl_rules);
+
   printf("************ FIREWALL INIT END ****************\n\n");
 
   return fw;
@@ -247,6 +256,7 @@ void firewall_free(struct firewall *fw) {
   }
 
   rte_acl_free(fw->acl_ctx);
+  rte_free(fw->acl_entries);
   rte_free(fw);
 }
 
@@ -277,6 +287,17 @@ void firewall_process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
   if (rte_acl_classify(fw->acl_ctx, fw->data_ipv4, fw->res_ipv4, fw->num_ipv4,
                        1) != 0) {
     rte_panic("wrong parameter");
+  }
+  int ipv4_idx = 0;
+  for (int i = 0; i < length; i++) {
+    if (fw->types[i] == PACKET_IPV4) {
+      int idx = fw->res_ipv4[ipv4_idx];
+      if (idx == 0 || idx > MAX_ACL_RULES) {
+        rte_panic("idx=%d > MAX_ACL_RULES\n", idx);
+      }
+      fw->acl_entries[idx].cnt++;
+      ipv4_idx++;
+    }
   }
 }
 /*
@@ -358,9 +379,9 @@ static void firewall_sender(thread_context_t *ctx) {
   uint64_t start, end;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
+
   while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
     cur_tsc = rte_rdtsc();
-
     difftsc = cur_tsc - prev_tsc;
     if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
       // if (difftsc > drain_tsc) {
@@ -396,7 +417,7 @@ static void firewall_sender(thread_context_t *ctx) {
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Sender Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
 }
 
 static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
@@ -429,7 +450,11 @@ static void firewall_receiver(thread_context_t *ctx) {
   int ret = -1;
   int loop_cnt = 0;
   uint64_t total_byte_cnt = 0;
+  uint64_t pure_process_time = 0, pure_start = 0;
+
   while (cnt < TOTAL_PACKET_COUNT) {
+    pure_start = rte_get_tsc_cycles();
+
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
@@ -449,16 +474,24 @@ static void firewall_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-    firewall_process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
+    for (int i = 0; i < 1; i++)
+      firewall_process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
+
     echo_back(ctx->rx_pkts, ret);
 
     send_all(ctx, ctx->rx_pkts, ret);
+    pure_process_time += (rte_get_tsc_cycles() - pure_start);
   }
   end = rte_get_tsc_cycles();
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1024 * 1024 * 1024) / us);
+         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
+
+  printf("Average per packet processing time:%f\n",
+         1000 * 1000 *
+             ((double)pure_process_time / (double)(rte_get_tsc_hz())) /
+             (double)TOTAL_PACKET_COUNT);
 }
 
 static void init_firewall_recv(struct thread_context *ctx) {

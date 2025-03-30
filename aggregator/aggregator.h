@@ -24,7 +24,8 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 1)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 2000000)
+// #define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 200)
 #define QUEUE_PER_PORT 1
 
 struct packet_mbuf {
@@ -114,6 +115,7 @@ extern struct dpdk_app nat_app;
 struct config {
   char *pcap_file_name;
   char *fw_rules_file_name;
+  struct dpdk_app *app;
 };
 extern struct config CONFIG;
 
@@ -134,6 +136,7 @@ struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
                                           struct rte_mbuf *pkt);
 extern struct config CONFIG;
 struct rte_mbuf *aggregator_get_packet_from_ready_queue(struct aggregator *agg);
+void parse_args(int argc, char **argv);
 // obtained directly from newer version DPDK
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
