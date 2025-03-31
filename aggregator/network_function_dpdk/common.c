@@ -1,5 +1,30 @@
 #include "../aggregator.h"
 
+static int check_ipv4_header(struct rte_ipv4_hdr *ipv4, int plen) {
+  if ((int)plen < (int)sizeof(struct rte_ipv4_hdr)) return 0;
+
+  unsigned version = (ipv4->version_ihl & 0xf0) >> 4;
+  unsigned hlen = (ipv4->version_ihl & 0x0f) << 2;
+
+  if (version != 4) return 0;
+
+  uint16_t len = rte_be_to_cpu_16(ipv4->total_length);
+
+
+  if (len > plen || len < hlen) {
+    return 0;
+  }
+
+  int val = in_cksum((const unsigned char *)ipv4,hlen);
+
+  struct rte_udp_hdr *udp = (struct rte_udp_hdr *)((uint8_t *)ipv4 + hlen);
+  int udp_len = plen - hlen;
+  //  FIXME just to simulate the calculation here, not right here
+  
+    unsigned csum = in_cksum((uint8_t *)udp, udp_len);
+  return 1;
+}
+
 int check_if_ipv4(struct rte_mbuf *mbuf) {
   if (mbuf == NULL) {
     rte_panic("NULL in check ipv4");
@@ -22,7 +47,8 @@ int check_if_ipv4(struct rte_mbuf *mbuf) {
       ipv4->next_proto_id != IPPROTO_UDP) {
     return 0;
   }
-  return 1;
+  // return 1;
+  return check_ipv4_header(ipv4, mbuf->data_len - sizeof(struct rte_ether_hdr));
 }
 
 void send_all(thread_context_t *ctx, struct rte_mbuf **tx_pkts,
@@ -61,4 +87,35 @@ void print_ipv4_udp_info(void *ctx, struct rte_mbuf **mbufs, int length) {
     printf("dst IP Address: %s Port:%d\n", inet_ntoa(ip_addr),
            rte_be_to_cpu_16(udp->dst_port));
   }
+}
+// code borrow from fastclick
+uint16_t in_cksum(const unsigned char *addr, int len) {
+  int nleft = len;
+  const uint16_t *w = (const uint16_t *)addr;
+  uint32_t sum = 0;
+  uint16_t answer = 0;
+
+  /*
+   * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+   * sequential 16 bit words to it, and at the end, fold back all the
+   * carry bits from the top 16 bits into the lower 16 bits.
+   */
+  while (nleft > 1) {
+    sum += *w++;
+    nleft -= 2;
+  }
+
+  /* mop up an odd byte, if necessary */
+  if (nleft == 1) {
+    *(unsigned char *)(&answer) = *(const unsigned char *)w;
+    sum += answer;
+  }
+
+  /* add back carry outs from top 16 bits to low 16 bits */
+  sum = (sum & 0xffff) + (sum >> 16);
+  sum += (sum >> 16);
+  /* guaranteed now that the lower 16 bits of sum are correct */
+
+  answer = ~sum; /* truncate to 16 bits */
+  return answer;
 }

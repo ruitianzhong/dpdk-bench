@@ -172,6 +172,9 @@ static void echo_receiver(thread_context_t *ctx) {
              total_byte_cnt);
       return;
     }
+    if (ret == 0) {
+      continue;
+    }
     cnt += ret;
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;

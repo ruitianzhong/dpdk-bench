@@ -67,6 +67,8 @@ struct pktgen_pcap *pktgen_pcap_create() {
     rte_exit(EXIT_FAILURE, "cannot allocate pktgen_pcap\n");
   }
   load_packet(p);
+  p->slf = CONFIG.slf;
+  p->slf_idx = 0;
   return p;
 }
 
@@ -84,6 +86,10 @@ void pktgen_pcap_free(struct pktgen_pcap *p) {
 struct packet *pktgen_pcap_get_packet(struct pktgen_pcap *p) {
   // TODO: FIXME
   struct packet *packet = &p->pkts[p->cur_idx];
-  p->cur_idx = (p->cur_idx + 1) % p->total_pkt_cnt;
+  p->slf_idx += 1;
+  if (p->slf_idx == p->slf) {
+    p->slf_idx = 0;
+    p->cur_idx = (p->cur_idx + 1) % p->total_pkt_cnt;
+  }
   return packet;
 }

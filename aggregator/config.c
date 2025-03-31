@@ -3,6 +3,7 @@ struct config CONFIG = {
     .pcap_file_name = "synthetic_slf1_flow_num1_count1_seed42.pcap",
     .fw_rules_file_name = "./rules/fw.rules",
     .app = NULL,
+    .slf = 32,
 };
 
 static void init_app(char *app_name) {
@@ -46,6 +47,18 @@ void parse_args(int argc, char **argv) {
       }
 
       init_app(argv[i + 1]);
+      i += 2;
+    } else if (strncmp(argv[i], "--slf", 6) == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "Not enough argument\n");
+      }
+
+      int slf = atoi(argv[i + 1]);
+
+      if (slf <= 0 || slf > 100) {
+        rte_exit(EXIT_FAILURE, "Bad slf=%d\n", slf);
+      }
+      CONFIG.slf = slf;
       i += 2;
     } else {
       rte_exit(EXIT_FAILURE, "unrecognized option: %s\n", argv[i]);
