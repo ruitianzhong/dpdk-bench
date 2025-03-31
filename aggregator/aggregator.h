@@ -24,7 +24,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 2000000)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 500000)
 // #define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 200)
 #define QUEUE_PER_PORT 1
 
@@ -116,6 +116,7 @@ struct config {
   char *pcap_file_name;
   char *fw_rules_file_name;
   struct dpdk_app *app;
+  uint32_t slf;
 };
 extern struct config CONFIG;
 
@@ -123,6 +124,8 @@ struct pktgen_pcap {
   int total_pkt_cnt;
   struct packet *pkts;
   int cur_idx;
+  int slf;
+  int slf_idx;
 };
 struct pktgen_pcap *pktgen_pcap_create();
 void pktgen_pcap_free(struct pktgen_pcap *p);
@@ -138,6 +141,8 @@ extern struct config CONFIG;
 struct rte_mbuf *aggregator_get_packet_from_ready_queue(struct aggregator *agg);
 void parse_args(int argc, char **argv);
 // obtained directly from newer version DPDK
+void print_eth_stat(int portid);
+uint16_t in_cksum(const unsigned char *addr, int len);
 #define AGG_ETHER_ADDR_BYTES(mac_addrs)                           \
   ((mac_addrs)->addr_bytes[0]), ((mac_addrs)->addr_bytes[1]),     \
       ((mac_addrs)->addr_bytes[2]), ((mac_addrs)->addr_bytes[3]), \

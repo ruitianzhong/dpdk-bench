@@ -2,8 +2,8 @@
 
 #include "../aggregator.h"
 
-#define BURST_TX_DRAIN_US 23
-#define MAX_INFLIGHT_PACKET (256 * 1)
+#define BURST_TX_DRAIN_US 10
+#define MAX_INFLIGHT_PACKET (128 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -79,7 +79,9 @@ static void echo_sender(thread_context_t *ctx) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
-    if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
+    // if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
+      if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT &&
+        inflight_packet < MAX_INFLIGHT_PACKET) {
       // if (difftsc > drain_tsc) {
       fill_packets(ctx);
 

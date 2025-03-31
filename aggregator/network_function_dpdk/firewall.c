@@ -304,7 +304,7 @@ void firewall_process_packet_burst(struct firewall *fw, struct rte_mbuf **bufs,
   Code obtained from one_way
 */
 
-#define BURST_TX_DRAIN_US 46
+#define BURST_TX_DRAIN_US 10
 #define MAX_INFLIGHT_PACKET (256 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
@@ -383,7 +383,9 @@ static void firewall_sender(thread_context_t *ctx) {
   while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
     cur_tsc = rte_rdtsc();
     difftsc = cur_tsc - prev_tsc;
-    if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
+    // if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
+    if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT &&
+        inflight_packet < MAX_INFLIGHT_PACKET) {
       // if (difftsc > drain_tsc) {
       fill_packets(ctx);
 

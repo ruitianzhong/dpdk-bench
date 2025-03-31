@@ -160,8 +160,8 @@ static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
   Code obtained from one_way
 */
 
-#define BURST_TX_DRAIN_US 46
-#define MAX_INFLIGHT_PACKET (256 * 1)
+#define BURST_TX_DRAIN_US 10
+#define MAX_INFLIGHT_PACKET (128 * 1)
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -239,8 +239,10 @@ static void nat_sender(thread_context_t *ctx) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
-    if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
-      // if (difftsc > drain_tsc) {
+    // if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
+    if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT &&
+        inflight_packet < MAX_INFLIGHT_PACKET) {
+      // if (difftsc > drain_tsc && cnt<TOTAL_PACKET_COUNT ) {
       fill_packets(ctx);
 
       send_all(ctx, ctx->tx_pkts, MAX_PKT_BURST);
@@ -324,13 +326,16 @@ static void nat_receiver(thread_context_t *ctx) {
              total_byte_cnt);
       return;
     }
+    if (ret == 0) {
+      continue;
+    }
     cnt += ret;
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-    // for (int i = 0; i < 9; i++)
-      process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts,
-                           ret);
+    // for (int i = 0; i <9; i++)
+    process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts, ret);
+    // rte_delay_us(6);
 
     echo_back(ctx->rx_pkts, ret);
 

@@ -119,3 +119,19 @@ uint16_t in_cksum(const unsigned char *addr, int len) {
   answer = ~sum; /* truncate to 16 bits */
   return answer;
 }
+
+void print_eth_stat(int portid) {
+  struct rte_eth_stats stat;
+  printf("\n----------- Statistic for port %d ----------------\n", portid);
+  int ret = rte_eth_stats_get(portid, &stat);
+  if (ret != 0) {
+    rte_panic("Cannot get stat from port %d\n", portid);
+  }
+  printf(
+      "Ingress:  pkt_cnt: %ld total byte: %ld ierror: %ld "
+      "imiss:%ld\n",
+      stat.ipackets, stat.ibytes, stat.ierrors, stat.imissed);
+  printf("Egress: pkt_cnt: %ld total byte: %ld oerror: %ld\n", stat.opackets,
+         stat.obytes, stat.oerrors);
+  printf("--------------------------------------------------\n\n");
+}
