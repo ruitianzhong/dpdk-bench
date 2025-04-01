@@ -25,6 +25,7 @@
 #include <rte_memory.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #include "../aggregator.h"
 #include "../util.h"
@@ -38,24 +39,38 @@
 
 // From my perspective, category is similar to `namespace`
 
-struct lan2wan_entry{
-    uint32_t src_ip;
-    uint16_t src_port;
-    int cnt;
+struct nat_flow_entry {
+  TAILQ_ENTRY(nat_flow_entry) tailq;
+  uint64_t timeout_sec;
+  struct ipv4_5tuple tuple;
+  uint16_t port;
 };
 
-struct wan2lan_entry{
-    uint32_t dst_ip;
-    uint16_t dst_port;
-    int cnt;
+TAILQ_HEAD(nat_flow_entry_head, nat_flow_entry);
+
+struct lan2wan_entry {
+  uint32_t src_ip;
+  uint16_t src_port;
+  int cnt;
+  struct nat_flow_entry *fe;
+};
+
+struct wan2lan_entry {
+  uint32_t dst_ip;
+  uint16_t dst_port;
+  int cnt;
+  struct nat_flow_entry *fe;
 };
 
 struct nat {
-  uint16_t current_port;
   struct rte_hash *lan2wan;
   struct rte_hash *wan2lan;
   struct lan2wan_entry l2w_entries[MAX_NAT_FLOW_NUM];
   struct wan2lan_entry w2l_entries[MAX_NAT_FLOW_NUM];
+  struct nat_flow_entry flow_entries[MAX_NAT_FLOW_NUM];
+  struct nat_flow_entry_head used_list;
+  struct nat_flow_entry_head free_list;
+  uint64_t last_check_time_sec;
 };
 
 static struct nat *nat_create() {
@@ -83,7 +98,14 @@ static struct nat *nat_create() {
   if (nat->wan2lan == NULL) {
     rte_exit(EXIT_FAILURE, "failed to allocate wan2lan\n");
   }
-  nat->current_port = 1024;
+  TAILQ_INIT(&nat->free_list);
+  TAILQ_INIT(&nat->used_list);
+
+  for (int i = 1024, idx = 0; i < MAX_NAT_FLOW_NUM; i++, idx++) {
+    struct nat_flow_entry *entry = &nat->flow_entries[idx];
+    entry->port = i;
+    TAILQ_INSERT_TAIL(&nat->free_list, entry, tailq);
+  }
   return nat;
 }
 
@@ -92,6 +114,32 @@ static void nat_free(struct nat *nat) {
   rte_hash_free(nat->wan2lan);
 
   free(nat);
+}
+
+static struct nat_flow_entry *allocate_port(struct nat *nat) {
+  if (TAILQ_EMPTY(&nat->free_list)) {
+    // TODO:Implement LRU eviction
+    rte_panic("not enough port\n");
+  }
+  struct nat_flow_entry *fe = TAILQ_FIRST(&nat->free_list);
+
+  TAILQ_REMOVE(&nat->free_list, fe, tailq);
+  return fe;
+}
+
+static void evict_packet_periodically(struct nat *nat) {
+  struct timeval tval;
+  gettimeofday(&tval, NULL);
+
+  while (!TAILQ_EMPTY(&nat->used_list)) {
+    struct nat_flow_entry *fe = TAILQ_FIRST(&nat->used_list);
+    if (fe->timeout_sec <= tval.tv_sec) {
+      // TODO: eviction
+      rte_panic("Eviction is not implemented for now");
+    } else {
+      break;
+    }
+  }
 }
 
 static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
@@ -126,18 +174,22 @@ static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
 
       entry = &nat->l2w_entries[ret];
 
-      if (nat->current_port == 65535) {
-        rte_panic("Not enough port\n");
-      }
+      struct nat_flow_entry *e = allocate_port(nat);
+      e->tuple = lan2wan;
+      struct timeval tval;
 
-      entry->src_port = rte_cpu_to_be_16(nat->current_port);
+      gettimeofday(&tval, NULL);
+      e->timeout_sec = tval.tv_sec + 1000;
+
+      entry->src_port = rte_cpu_to_be_16(e->port);
       entry->src_ip = RTE_IPV4(127, 0, 0, 1);
       entry->cnt = 0;
+      entry->fe = e;
 
       wan2lan.ip_dst = RTE_IPV4(127, 0, 0, 1);
       wan2lan.ip_src = ipv4->dst_addr;
       wan2lan.port_src = udp->dst_port;
-      wan2lan.port_dst = rte_cpu_to_be_16(nat->current_port);
+      wan2lan.port_dst = rte_cpu_to_be_16(e->port);
       wan2lan.proto = ipv4->next_proto_id;
 
       ret = rte_hash_add_key(nat->wan2lan, &wan2lan);
@@ -145,16 +197,23 @@ static void process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
 
       w2l_e->dst_ip = ipv4->src_addr;
       w2l_e->dst_port = udp->src_port;
+      w2l_e->fe = e;
+      TAILQ_INSERT_TAIL(&nat->used_list, e, tailq);
 
-      nat->current_port++;
     } else {
       entry = &nat->l2w_entries[ret];
       entry->cnt++;
+      TAILQ_REMOVE(&nat->used_list, entry->fe, tailq);
+      TAILQ_INSERT_TAIL(&nat->used_list, entry->fe, tailq);
+      struct timeval tval;
+      gettimeofday(&tval, NULL);
+      entry->fe->timeout_sec = tval.tv_sec + 60 * 10;
     }
 
     // udp->src_port = entry->src_port;
     // ipv4->src_addr = entry->src_ip;
   }
+  evict_packet_periodically(nat);
 }
 /*
   Code obtained from one_way
@@ -224,8 +283,9 @@ static void nat_sender(thread_context_t *ctx) {
   uint16_t lcore_id = rte_lcore_id();
 
   int cnt = 0;
+  uint64_t back_pressure_cnt = 0;
   const uint64_t drain_tsc =
-      (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S * BURST_TX_DRAIN_US;
+      ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) * BURST_TX_DRAIN_US;
 
   uint64_t prev_tsc = 0, cur_tsc = 0, difftsc;
   printf("sender start\n");
@@ -233,6 +293,7 @@ static void nat_sender(thread_context_t *ctx) {
   uint16_t ret = 0;
   uint64_t total_latency_us = 0, total_byte_cnt = 0, inflight_packet = 0;
   uint64_t start, end;
+  uint64_t inflight_stat = 0, inflight_stat_cnt = 0;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
   while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
@@ -249,7 +310,13 @@ static void nat_sender(thread_context_t *ctx) {
       cnt += MAX_PKT_BURST;
       replenish_tx_mbuf(ctx);
       prev_tsc = cur_tsc;
+      inflight_stat += inflight_packet;
       inflight_packet += MAX_PKT_BURST;
+      inflight_stat_cnt++;
+
+    } else if (cnt < TOTAL_PACKET_COUNT &&
+               inflight_packet >= MAX_INFLIGHT_PACKET) {
+      back_pressure_cnt++;
     }
 
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
@@ -266,8 +333,12 @@ static void nat_sender(thread_context_t *ctx) {
     }
   }
   // TODO: calculate tail latency(more important for SLO)
-  printf("average latency: %f us\n",
-         (double)total_latency_us / (double)TOTAL_PACKET_COUNT);
+  printf(
+      "average latency: %f us total backpressure: %ld average inflight:%f "
+      "%ld/%ld\n",
+      (double)total_latency_us / (double)TOTAL_PACKET_COUNT, back_pressure_cnt,
+      (double)inflight_stat / (double)(inflight_stat_cnt), inflight_stat,
+      inflight_stat_cnt);
 
   end = rte_get_tsc_cycles();
   uint64_t hz = rte_get_tsc_hz();
@@ -308,14 +379,15 @@ static void nat_receiver(thread_context_t *ctx) {
   int ret = -1;
   int loop_cnt = 0;
   uint64_t total_byte_cnt = 0;
-  uint64_t pure_process_time=0,pure_start=0;
+  uint64_t pure_process_time = 0, pure_start = 0;
   while (cnt < TOTAL_PACKET_COUNT) {
-    pure_start=rte_get_tsc_cycles();
+    
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     if (ret < 0) {
       break;
     }
+    pure_start = rte_get_tsc_cycles();
     if (ret == 0) {
       loop_cnt++;
     } else {
@@ -333,24 +405,26 @@ static void nat_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-    // for (int i = 0; i <9; i++)
-    process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts, ret);
+
+    for (int i = 0; i < 1; i++)
+      process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts,
+                           ret);
     // rte_delay_us(6);
-
     echo_back(ctx->rx_pkts, ret);
-
-    send_all(ctx, ctx->rx_pkts, ret);
     pure_process_time += (rte_get_tsc_cycles() - pure_start);
+    send_all(ctx, ctx->rx_pkts, ret);
+    
   }
   end = rte_get_tsc_cycles();
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
          8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
-  printf("Average per packet processing time:%f\n",
+  printf("Average per packet processing time:%f average cycle %f\n",
          1000 * 1000 *
              ((double)pure_process_time / (double)(rte_get_tsc_hz())) /
-             (double)TOTAL_PACKET_COUNT);
+             (double)TOTAL_PACKET_COUNT,
+         (double)pure_process_time / (double)TOTAL_PACKET_COUNT);
 }
 
 static void init_nat_recv(struct thread_context *ctx) {
