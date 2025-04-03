@@ -1,10 +1,15 @@
 #include "../aggregator.h"
 
 static int check_ipv4_header(struct rte_ipv4_hdr *ipv4, int plen) {
+  // uint64_t start,end;
+  // static uint64_t total = 0,cnt=0;
+  // start =rte_get_tsc_cycles();
   if ((int)plen < (int)sizeof(struct rte_ipv4_hdr)) return 0;
 
   unsigned version = (ipv4->version_ihl & 0xf0) >> 4;
   unsigned hlen = (ipv4->version_ihl & 0x0f) << 2;
+
+  if (hlen < sizeof(struct rte_ipv4_hdr)) return 0;
 
   if (version != 4) return 0;
 
@@ -22,6 +27,15 @@ static int check_ipv4_header(struct rte_ipv4_hdr *ipv4, int plen) {
   //  FIXME just to simulate the calculation here, not right here
   
     unsigned csum = in_cksum((uint8_t *)udp, udp_len);
+
+    // end =rte_get_tsc_cycles();
+    // total+=(end-start);
+    // cnt++;
+    // if (cnt==100000){
+    //   printf("IP %f cycles\n", (double)total / (double)cnt);
+    // }
+
+    
   return 1;
 }
 

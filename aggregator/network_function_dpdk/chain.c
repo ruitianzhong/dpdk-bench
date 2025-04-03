@@ -37,158 +37,37 @@
 #define MAX_LINE_CHARACTER 64
 #define MAX_RULE_NUM 30000
 
-
-// From my perspective, category is similar to `namespace`
-
-struct nat *nat_create() {
-  struct nat *nat = calloc(1, sizeof(struct nat));
-  if (nat == NULL) {
-    rte_exit(EXIT_FAILURE, "failed to allocate mem @%s\n", __func__);
-  }
-
-  struct rte_hash_parameters param = {
-      .entries = MAX_NAT_FLOW_NUM,
-      .hash_func = rte_hash_crc,
-      .key_len = sizeof(struct ipv4_5tuple),
-      .socket_id = rte_socket_id(),
-      .hash_func_init_val = 0,
-  };
-
-  param.name = "lan2wan";
-  nat->lan2wan = rte_hash_create(&param);
-  if (nat->lan2wan == NULL) {
-    rte_exit(EXIT_FAILURE, "failed to allocate lan2wan\n");
-  }
-
-  param.name = "wan2lan";
-  nat->wan2lan = rte_hash_create(&param);
-  if (nat->wan2lan == NULL) {
-    rte_exit(EXIT_FAILURE, "failed to allocate wan2lan\n");
-  }
-  TAILQ_INIT(&nat->free_list);
-  TAILQ_INIT(&nat->used_list);
-
-  for (int i = 1024, idx = 0; i < MAX_NAT_FLOW_NUM; i++, idx++) {
-    struct nat_flow_entry *entry = &nat->flow_entries[idx];
-    entry->port = i;
-    TAILQ_INSERT_TAIL(&nat->free_list, entry, tailq);
-  }
-  return nat;
-}
-
-void nat_free(struct nat *nat) {
-  rte_hash_free(nat->lan2wan);
-  rte_hash_free(nat->wan2lan);
-
-  free(nat);
-}
-
-static struct nat_flow_entry *allocate_port(struct nat *nat) {
-  if (TAILQ_EMPTY(&nat->free_list)) {
-    // TODO:Implement LRU eviction
-    rte_panic("not enough port\n");
-  }
-  struct nat_flow_entry *fe = TAILQ_FIRST(&nat->free_list);
-
-  TAILQ_REMOVE(&nat->free_list, fe, tailq);
-  return fe;
-}
-
-static void evict_packet_periodically(struct nat *nat) {
-  struct timeval tval;
-  gettimeofday(&tval, NULL);
-
-  while (!TAILQ_EMPTY(&nat->used_list)) {
-    struct nat_flow_entry *fe = TAILQ_FIRST(&nat->used_list);
-    if (fe->timeout_sec <= tval.tv_sec) {
-      // TODO: eviction
-      rte_panic("Eviction is not implemented for now");
-    } else {
-      break;
-    }
-  }
-}
-
-void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
-                              size_t length) {
-  for (int i = 0; i < length; i++) {
-    struct rte_mbuf *m = bufs[i];
-    if (!check_if_ipv4(m)) {
-      continue;
-    }
-    struct rte_udp_hdr *udp;
-    struct rte_ipv4_hdr *ipv4;
-    struct ipv4_5tuple lan2wan, wan2lan;
-
-    udp = rte_pktmbuf_mtod_offset(
-        m, struct rte_udp_hdr *,
-        sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
-
-    ipv4 = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr *,
-                                   sizeof(struct rte_ether_hdr));
-
-    lan2wan.ip_dst = ipv4->dst_addr;
-    lan2wan.ip_src = ipv4->src_addr;
-    lan2wan.port_src = udp->src_port;
-    lan2wan.port_dst = udp->dst_port;
-    lan2wan.proto = ipv4->next_proto_id;
-
-    int ret = rte_hash_lookup(nat->lan2wan, &lan2wan);
-    struct lan2wan_entry *entry = NULL;
-
-    if (ret < 0) {
-      ret = rte_hash_add_key(nat->lan2wan, &lan2wan);
-
-      entry = &nat->l2w_entries[ret];
-
-      struct nat_flow_entry *e = allocate_port(nat);
-      e->tuple = lan2wan;
-      struct timeval tval;
-
-      gettimeofday(&tval, NULL);
-      e->timeout_sec = tval.tv_sec + 1000;
-
-      entry->src_port = rte_cpu_to_be_16(e->port);
-      entry->src_ip = RTE_IPV4(127, 0, 0, 1);
-      entry->cnt = 0;
-      entry->fe = e;
-
-      wan2lan.ip_dst = RTE_IPV4(127, 0, 0, 1);
-      wan2lan.ip_src = ipv4->dst_addr;
-      wan2lan.port_src = udp->dst_port;
-      wan2lan.port_dst = rte_cpu_to_be_16(e->port);
-      wan2lan.proto = ipv4->next_proto_id;
-
-      ret = rte_hash_add_key(nat->wan2lan, &wan2lan);
-      struct wan2lan_entry *w2l_e = &nat->w2l_entries[ret];
-
-      w2l_e->dst_ip = ipv4->src_addr;
-      w2l_e->dst_port = udp->src_port;
-      w2l_e->fe = e;
-      TAILQ_INSERT_TAIL(&nat->used_list, e, tailq);
-
-    } else {
-      entry = &nat->l2w_entries[ret];
-      entry->cnt++;
-      TAILQ_REMOVE(&nat->used_list, entry->fe, tailq);
-      TAILQ_INSERT_TAIL(&nat->used_list, entry->fe, tailq);
-      struct timeval tval;
-      gettimeofday(&tval, NULL);
-      entry->fe->timeout_sec = tval.tv_sec + 60 * 10;
-    }
-
-    // udp->src_port = entry->src_port;
-    // ipv4->src_addr = entry->src_ip;
-    evict_packet_periodically(nat);
-
-  }
-}
+#define MAX_NAT_FLOW_NUM 65535
 /*
   Code obtained from one_way
 */
 
-#define BURST_TX_DRAIN_US 7
+#define BURST_TX_DRAIN_US 5
 #define MAX_INFLIGHT_PACKET (128 * 1)
+
+struct chain {
+  struct firewall *fw;
+  struct flow_counter *fc;
+  struct nat *nat;
+  struct router *route;
+};
+
+struct chain * chain_create(){
+  struct chain *c = rte_malloc("chain", sizeof(struct chain), 0);
+  c->nat = nat_create();
+  c->fc = flow_counter_create();
+  c->route = router_create();
+  c->fw = firewall_create();
+  return c;
+}
+
+void chain_free(struct chain* c){
+    nat_free(c->nat);
+    firewall_free(c->fw);
+    router_free(c->route);
+    flow_counter_free(c->fc);
+    rte_free(c);
+}
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
   for (int i = 0; i < MAX_PKT_BURST; i++) {
@@ -247,7 +126,7 @@ static uint64_t calculate_latency(struct rte_mbuf **rx_pkts, uint16_t nb_pkts,
   return total;
 }
 
-static void nat_sender(thread_context_t *ctx) {
+static void chain_sender(thread_context_t *ctx) {
   uint16_t lcore_id = rte_lcore_id();
 
   int cnt = 0;
@@ -334,7 +213,7 @@ static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
   }
 }
 
-static void nat_receiver(thread_context_t *ctx) {
+static void chain_receiver(thread_context_t *ctx) {
   int lcore_id = rte_lcore_id();
   printf("server side lcore:%d port_id=%d queue_id=%d\n", lcore_id,
          ctx->port_id, ctx->queue_id);
@@ -348,7 +227,7 @@ static void nat_receiver(thread_context_t *ctx) {
   int loop_cnt = 0;
   uint64_t total_byte_cnt = 0;
   uint64_t pure_process_time = 0, pure_start = 0;
-  struct nat *nat = (struct nat *)ctx->recv_priv_data;
+  struct chain *chain = (struct chain *)ctx->recv_priv_data;
   while (cnt < TOTAL_PACKET_COUNT) {
     pure_start = rte_get_tsc_cycles();
 
@@ -375,10 +254,12 @@ static void nat_receiver(thread_context_t *ctx) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
 
-    for (int i = 0; i < 1; i++)
-      nat_process_packet_burst((struct nat *)ctx->recv_priv_data, ctx->rx_pkts,
-                           ret);
-
+    for (int i = 0; i < 1; i++) {
+      nat_process_packet_burst(chain->nat, ctx->rx_pkts, ret);
+      firewall_process_packet_burst(chain->fw, ctx->rx_pkts, ret);
+      flow_counter_process_packet_burst(chain->fc, ctx->rx_pkts, ret);
+      router_process_burst(chain->route, ctx->rx_pkts, ret);
+    }
     echo_back(ctx->rx_pkts, ret);
     send_all(ctx, ctx->rx_pkts, ret);
     pure_process_time += (rte_get_tsc_cycles() - pure_start);
@@ -396,27 +277,27 @@ static void nat_receiver(thread_context_t *ctx) {
          (double)pure_process_time / (double)TOTAL_PACKET_COUNT);
 }
 
-static void init_nat_recv(struct thread_context *ctx) {
-  ctx->recv_priv_data = nat_create();
+static void init_chain_recv(struct thread_context *ctx) {
+  ctx->recv_priv_data = chain_create();
 }
 
-static void free_nat_recv(struct thread_context *ctx) {
-  nat_free((struct nat *)ctx->recv_priv_data);
+static void free_chain_recv(struct thread_context *ctx) {
+  chain_free((struct chain *)ctx->recv_priv_data);
 }
 
-static void init_nat_send(struct thread_context *ctx) {
+static void init_chain_send(struct thread_context *ctx) {
   ctx->send_priv_data = pktgen_pcap_create();
 }
 
-static void free_nat_send(struct thread_context *ctx) {
+static void free_chain_send(struct thread_context *ctx) {
   pktgen_pcap_free((struct pktgen_pcap *)(ctx->send_priv_data));
 }
 
-struct dpdk_app nat_app = {
-    .receive = nat_receiver,
-    .send = nat_sender,
-    .send_init = init_nat_send,
-    .send_free = free_nat_send,
-    .recv_free = free_nat_recv,
-    .recv_init = init_nat_recv,
+struct dpdk_app chain_app = {
+    .receive = chain_receiver,
+    .send = chain_sender,
+    .send_init = init_chain_send,
+    .send_free = free_chain_send,
+    .recv_free = free_chain_recv,
+    .recv_init = init_chain_recv,
 };

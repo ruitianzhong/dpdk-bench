@@ -230,7 +230,7 @@ struct firewall *firewall_create() {
   ret = rte_acl_build(acx, &cfg);
 
   if (ret != 0) {
-    rte_exit(EXIT_FAILURE, "fail to build acl");
+    rte_exit(EXIT_FAILURE, "fail to build acl err code=%d\n", ret);
   }
   rte_acl_dump(acx);
   fw->acl_ctx = acx;

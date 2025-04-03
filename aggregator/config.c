@@ -15,6 +15,8 @@ static void init_app(char *app_name) {
     CONFIG.app = &firewall_app;
   } else if (strncmp(app_name, "nat", 4) == 0) {
     CONFIG.app = &nat_app;
+  } else if (strncmp(app_name,"chain",6)==0){
+    CONFIG.app = &chain_app;
   } else {
     rte_exit(EXIT_FAILURE, "unknown app name %s\n", app_name);
   }

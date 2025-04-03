@@ -6,7 +6,8 @@ APP = back2back
 # all source are stored in SRCS-y
 SRCS-y := main.c network_function_dpdk/two_way.c network_function_dpdk/one_way.c network_function_dpdk/firewall.c \
  network_function_dpdk/common.c network_function_dpdk/pkt_gen.c \
-  network_function_dpdk/nat.c aggregator.c config.c
+  network_function_dpdk/nat.c aggregator.c config.c network_function_dpdk/router.c \
+  network_function_dpdk/flow_counter.c network_function_dpdk/chain.c
 HEADERS := aggregator.h dpdk_app.h
 PCAP_LIBS := -lpcap
 

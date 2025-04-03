@@ -20,6 +20,13 @@ This script generate both the ACL file and synthetic flow stored in *.pcap
 firewall rules(ACL rules) similar to POM paper
 """
 
+def generate_random_str(randomlength=16):
+    random_str = ''
+    base_str = 'ABCDEFGHIGKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789'
+    length = len(base_str) - 1
+    for i in range(randomlength):
+        random_str += base_str[random.randint(0, length)]
+    return random_str
 
 def generate_fw_rules(filename, src_ips, dst_ips):
     random.shuffle(dst_ips)
