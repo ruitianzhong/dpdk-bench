@@ -36,6 +36,8 @@ struct route_table_entry {
 
 struct router {
   struct route_table_entry tables[MAX_ROUTE_TABLE_SIZE];
+  struct ipv4_5tuple tuple;
+  int result;
 };
 
 void router_process_burst(struct router *r, struct rte_mbuf **mbuf, int len);
@@ -58,6 +60,10 @@ struct flow_counter {
   struct flow_counter_entry entries[MAX_FLOW_NUM];
 
   struct fc_flow_head flow_list;
+
+  struct ipv4_5tuple cache_tuple;
+
+  int cache_idx;
 };
 
 struct flow_counter *flow_counter_create();
@@ -77,12 +83,13 @@ struct nat_flow_entry {
 
 #define MAX_NAT_FLOW_NUM 65535
 TAILQ_HEAD(nat_flow_entry_head, nat_flow_entry);
-
+#define BUF_SIZE 10000
 struct lan2wan_entry {
   uint32_t src_ip;
   uint16_t src_port;
   int cnt;
   struct nat_flow_entry *fe;
+  char buf[BUF_SIZE];
 };
 
 struct wan2lan_entry {
@@ -101,8 +108,8 @@ struct nat {
   struct nat_flow_entry_head used_list;
   struct nat_flow_entry_head free_list;
   uint64_t last_check_time_sec;
-  struct firewall *fw;
-  struct flow_counter *fc;
+  struct ipv4_5tuple cache_tuple;
+  int cache_idx;
 };
 
 struct nat *nat_create();

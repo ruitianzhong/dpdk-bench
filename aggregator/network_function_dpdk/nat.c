@@ -20,7 +20,6 @@
 #include <sys/queue.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
-#define HASH_ENTRIES 2048
 #include <rte_acl.h>
 #include <rte_memory.h>
 #include <stddef.h>
@@ -41,7 +40,7 @@
 // From my perspective, category is similar to `namespace`
 
 struct nat *nat_create() {
-  struct nat *nat = calloc(1, sizeof(struct nat));
+  struct nat *nat = (struct nat *)calloc(1, sizeof(struct nat));
   if (nat == NULL) {
     rte_exit(EXIT_FAILURE, "failed to allocate mem @%s\n", __func__);
   }
@@ -73,6 +72,7 @@ struct nat *nat_create() {
     entry->port = i;
     TAILQ_INSERT_TAIL(&nat->free_list, entry, tailq);
   }
+  nat->cache_idx = -1;
   return nat;
 }
 
@@ -109,6 +109,7 @@ static void evict_packet_periodically(struct nat *nat) {
   }
 }
 
+
 void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
                               size_t length) {
   for (int i = 0; i < length; i++) {
@@ -132,9 +133,15 @@ void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
     lan2wan.port_src = udp->src_port;
     lan2wan.port_dst = udp->dst_port;
     lan2wan.proto = ipv4->next_proto_id;
+    struct lan2wan_entry *entry = NULL;
+
+    if (nat->cache_idx != -1 && tuple_equal(&lan2wan, &nat->cache_tuple)) {
+      entry = &nat->l2w_entries[nat->cache_idx];
+      evict_packet_periodically(nat);
+      continue;
+    }
 
     int ret = rte_hash_lookup(nat->lan2wan, &lan2wan);
-    struct lan2wan_entry *entry = NULL;
 
     if (ret < 0) {
       ret = rte_hash_add_key(nat->lan2wan, &lan2wan);
@@ -176,11 +183,20 @@ void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
       gettimeofday(&tval, NULL);
       entry->fe->timeout_sec = tval.tv_sec + 60 * 10;
     }
+    // for (int k = 0; k < 1; k++)
+    //   for (int j = 0; j < BUF_SIZE; j++) {
+    //     char c = entry->buf[j];
+    //     c = c + 1;
+    //     entry->buf[j] = c;
+    //   }
+    // rte_delay_us(1);
 
     // udp->src_port = entry->src_port;
     // ipv4->src_addr = entry->src_ip;
     evict_packet_periodically(nat);
-
+    nat->cache_idx = ret;
+    assert(ret >= 0);
+    nat->cache_tuple = lan2wan;
   }
 }
 /*
@@ -211,7 +227,8 @@ static void fill_packets(struct thread_context *ctx) {
     m->nb_segs = 1;
     m->next = NULL;
 
-    struct packet *p = pktgen_pcap_get_packet(ctx->send_priv_data);
+    struct packet *p =
+        pktgen_pcap_get_packet((struct pktgen_pcap *)ctx->send_priv_data);
 
     memcpy(eth, p->data, offset);
     // just for experiment here

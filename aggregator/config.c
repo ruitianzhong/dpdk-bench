@@ -3,7 +3,8 @@ struct config CONFIG = {
     .pcap_file_name = "synthetic_slf1_flow_num1_count1_seed42.pcap",
     .fw_rules_file_name = "./rules/fw.rules",
     .app = NULL,
-    .slf = 32,
+    .slf = 1,
+    .enable_aggregate = 1,
 };
 
 static void init_app(char *app_name) {

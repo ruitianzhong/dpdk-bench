@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/queue.h>
+#include <stdlib.h>
 
 #define DEFAULT_HASH_FUNC rte_hash_crc
 #define HASH_ENTRIES 2048
@@ -42,7 +43,8 @@
   Code obtained from one_way
 */
 
-#define BURST_TX_DRAIN_US 5
+#define BURST_TX_DRAIN_US 60
+#define GBPS 25
 #define MAX_INFLIGHT_PACKET (128 * 1)
 
 struct chain {
@@ -50,14 +52,23 @@ struct chain {
   struct flow_counter *fc;
   struct nat *nat;
   struct router *route;
+  struct aggregator *agg;
+  struct router *routers[5];
 };
 
 struct chain * chain_create(){
-  struct chain *c = rte_malloc("chain", sizeof(struct chain), 0);
+  struct chain *c =
+      (struct chain *)rte_malloc("chain", sizeof(struct chain), 0);
   c->nat = nat_create();
   c->fc = flow_counter_create();
   c->route = router_create();
   c->fw = firewall_create();
+  c->agg = aggregator_create();
+
+  for (int i = 0; i < 5; i++) {
+    c->routers[i] = router_create();
+  }
+
   return c;
 }
 
@@ -78,10 +89,10 @@ static void replenish_tx_mbuf(struct thread_context *ctx) {
   }
 }
 
-static void fill_packets(struct thread_context *ctx) {
+static void fill_packets(struct thread_context *ctx, int size) {
   int offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) +
                sizeof(struct rte_udp_hdr);
-  for (int i = 0; i < MAX_PKT_BURST; i++) {
+  for (int i = 0; i < size; i++) {
     struct rte_mbuf *m = ctx->tx_pkts[i];
 
     struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
@@ -90,7 +101,8 @@ static void fill_packets(struct thread_context *ctx) {
     m->nb_segs = 1;
     m->next = NULL;
 
-    struct packet *p = pktgen_pcap_get_packet(ctx->send_priv_data);
+    struct packet *p =
+        pktgen_pcap_get_packet((struct pktgen_pcap *)ctx->send_priv_data);
 
     memcpy(eth, p->data, offset);
     // just for experiment here
@@ -131,35 +143,41 @@ static void chain_sender(thread_context_t *ctx) {
 
   int cnt = 0;
   uint64_t back_pressure_cnt = 0;
+
   const uint64_t drain_tsc =
-      ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) * BURST_TX_DRAIN_US;
+      ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) * 256 / GBPS;
 
   uint64_t prev_tsc = 0, cur_tsc = 0, difftsc;
   printf("sender start\n");
-  replenish_tx_mbuf(ctx);
   uint16_t ret = 0;
   uint64_t total_latency_us = 0, total_byte_cnt = 0, inflight_packet = 0;
   uint64_t start, end;
   uint64_t inflight_stat = 0, inflight_stat_cnt = 0;
   start = rte_get_tsc_cycles();
   int rx_cnt = 0;
+  uint64_t acked = 0;
+  replenish_tx_mbuf(ctx);
   while (cnt < TOTAL_PACKET_COUNT || inflight_packet > 0) {
     cur_tsc = rte_rdtsc();
 
     difftsc = cur_tsc - prev_tsc;
     // if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
-    if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT &&
+    if (difftsc > drain_tsc && cnt + MAX_PKT_BURST <= TOTAL_PACKET_COUNT &&
         inflight_packet < MAX_INFLIGHT_PACKET) {
-      // if (difftsc > drain_tsc && cnt<TOTAL_PACKET_COUNT ) {
-      fill_packets(ctx);
+      // if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT) {
+      int budget = MAX_PKT_BURST;
+    
+      fill_packets(ctx, budget);
 
-      send_all(ctx, ctx->tx_pkts, MAX_PKT_BURST);
-      cnt += MAX_PKT_BURST;
-      replenish_tx_mbuf(ctx);
+      send_all(ctx, ctx->tx_pkts, budget);
+      cnt += budget;
+
       prev_tsc = cur_tsc;
       inflight_stat += inflight_packet;
-      inflight_packet += MAX_PKT_BURST;
+      inflight_packet += budget;
       inflight_stat_cnt++;
+
+      replenish_tx_mbuf(ctx);
 
     } else if (cnt < TOTAL_PACKET_COUNT &&
                inflight_packet >= MAX_INFLIGHT_PACKET) {
@@ -169,6 +187,7 @@ static void chain_sender(thread_context_t *ctx) {
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
     inflight_packet -= ret;
+    acked += ret;
     int bytes_cnt = 0;
     if (ret > 0) {
       total_latency_us += calculate_latency(ctx->rx_pkts, ret, &bytes_cnt);
@@ -182,18 +201,13 @@ static void chain_sender(thread_context_t *ctx) {
   // TODO: calculate tail latency(more important for SLO)
   printf(
       "average latency: %f us total backpressure: %ld average inflight:%f "
-      "%ld/%ld\n",
-      (double)total_latency_us / (double)TOTAL_PACKET_COUNT, back_pressure_cnt,
-      (double)inflight_stat / (double)(inflight_stat_cnt), inflight_stat,
-      inflight_stat_cnt);
+      "acked :%ld\n",
+      (double)total_latency_us / (double)acked, back_pressure_cnt,
+      (double)inflight_stat / (double)(inflight_stat_cnt), acked);
 
   end = rte_get_tsc_cycles();
   uint64_t hz = rte_get_tsc_hz();
 
-  double us = ((double)(end - start)) / (double)hz;
-
-  printf("Sender Queue %d Throughput: %f Gbps\n", ctx->queue_id,
-         8.0 * (double)(total_byte_cnt) / (double)(1000 * 1000 * 1000) / us);
 }
 
 static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
@@ -220,7 +234,7 @@ static void chain_receiver(thread_context_t *ctx) {
 
   uint64_t hz = rte_get_tsc_hz();
 
-  uint64_t start, end;
+  uint64_t start, end = 0;
   start = rte_get_tsc_cycles();
   int cnt = 0;
   int ret = -1;
@@ -231,8 +245,15 @@ static void chain_receiver(thread_context_t *ctx) {
   while (cnt < TOTAL_PACKET_COUNT) {
     pure_start = rte_get_tsc_cycles();
 
+
+    if (!CONFIG.enable_aggregate)
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
                            MAX_PKT_BURST);
+    else
+      ret = aggregator_rx_burst(chain->agg, ctx->port_id, ctx->queue_id,
+                                ctx->rx_pkts, MAX_PKT_BURST);
+
+
     if (ret < 0) {
       break;
     }
@@ -241,10 +262,8 @@ static void chain_receiver(thread_context_t *ctx) {
     } else {
       loop_cnt = 0;
     }
-    if (loop_cnt == 100000000) {
-      printf("No packet can be received, total_byte_cnt=%ld Exit!\n",
-             total_byte_cnt);
-      return;
+    if (loop_cnt == 100000000){
+      break;
     }
     if (ret == 0) {
       continue;
@@ -260,12 +279,13 @@ static void chain_receiver(thread_context_t *ctx) {
       flow_counter_process_packet_burst(chain->fc, ctx->rx_pkts, ret);
       router_process_burst(chain->route, ctx->rx_pkts, ret);
     }
-    echo_back(ctx->rx_pkts, ret);
-    send_all(ctx, ctx->rx_pkts, ret);
+  
     pure_process_time += (rte_get_tsc_cycles() - pure_start);
 
+    echo_back(ctx->rx_pkts, ret);
+    send_all(ctx, ctx->rx_pkts, ret);
+    end = rte_get_tsc_cycles();
   }
-  end = rte_get_tsc_cycles();
   double us = ((double)(end - start)) / (double)hz;
 
   printf("Receiver Queue %d Throughput: %f Gbps\n", ctx->queue_id,
@@ -273,8 +293,10 @@ static void chain_receiver(thread_context_t *ctx) {
   printf("Average per packet processing time:%f average cycle %f\n",
          1000 * 1000 *
              ((double)pure_process_time / (double)(rte_get_tsc_hz())) /
-             (double)TOTAL_PACKET_COUNT,
-         (double)pure_process_time / (double)TOTAL_PACKET_COUNT);
+             (double)cnt,
+         (double)pure_process_time / (double)cnt);
+  printf("average batch size per flow %f\n",
+         (double)chain->agg->batch_total / (double)chain->agg->batch_cnt);
 }
 
 static void init_chain_recv(struct thread_context *ctx) {
@@ -294,10 +316,10 @@ static void free_chain_send(struct thread_context *ctx) {
 }
 
 struct dpdk_app chain_app = {
-    .receive = chain_receiver,
     .send = chain_sender,
+    .receive = chain_receiver,
     .send_init = init_chain_send,
     .send_free = free_chain_send,
-    .recv_free = free_chain_recv,
     .recv_init = init_chain_recv,
+    .recv_free = free_chain_recv,
 };

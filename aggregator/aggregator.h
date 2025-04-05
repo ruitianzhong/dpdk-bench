@@ -70,6 +70,9 @@ struct aggregator {
   uint64_t buffer_time_us;
 
   struct packet_mbuf_mempool *pool;
+
+  uint64_t batch_cnt;
+  uint64_t batch_total;
 };
 
 #define _NF_COMMON
@@ -118,6 +121,7 @@ struct config {
   char *fw_rules_file_name;
   struct dpdk_app *app;
   uint32_t slf;
+  bool enable_aggregate;
 };
 extern struct config CONFIG;
 
@@ -140,6 +144,9 @@ struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
                                           struct rte_mbuf *pkt);
 extern struct config CONFIG;
 struct rte_mbuf *aggregator_get_packet_from_ready_queue(struct aggregator *agg);
+uint16_t aggregator_rx_burst(struct aggregator *agg, uint16_t port_id,
+                             uint16_t queue_id, struct rte_mbuf **rx_pkts,
+                             const uint16_t nb_pkts);
 void parse_args(int argc, char **argv);
 // obtained directly from newer version DPDK
 void print_eth_stat(int portid);

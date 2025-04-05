@@ -30,14 +30,14 @@
 struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
                                           struct rte_mbuf *pkt);
 struct packet_mbuf_mempool *packet_mbuf_mempool_create() {
-  struct packet_mbuf_mempool *pool =
-      rte_malloc("packet_mbuf", sizeof(struct packet_mbuf_mempool), 0);
+  struct packet_mbuf_mempool *pool = (struct packet_mbuf_mempool *)rte_malloc(
+      "packet_mbuf", sizeof(struct packet_mbuf_mempool), 0);
   if (pool == NULL) {
     rte_panic("pool");
   }
 
-  pool->pool =
-      rte_zmalloc("packet pool", sizeof(struct packet_mbuf) * NB_MBUF, 0);
+  pool->pool = (struct packet_mbuf *)rte_zmalloc(
+      "packet pool", sizeof(struct packet_mbuf) * NB_MBUF, 0);
   if (pool->pool == NULL) {
     rte_panic("pool");
   }
@@ -72,6 +72,7 @@ void packet_mbuf_mempool_free(struct packet_mbuf_mempool *pool) {
 struct aggregator *aggregator_create() {
   // init the cucko hash table
   char ht_name[64];
+  struct aggregator *agg = NULL;
   snprintf(ht_name, sizeof(ht_name), "aggregator-hashtable");
   struct rte_hash_parameters param = {
       .name = ht_name,
@@ -89,7 +90,7 @@ struct aggregator *aggregator_create() {
     goto err;
   }
   // For NUMA-aware memory allocation
-  struct flow_entry *fe = rte_zmalloc(
+  struct flow_entry *fe = (struct flow_entry *)rte_zmalloc(
       "aggregator_flow", sizeof(struct flow_entry) * MAX_FLOW_PER_CORE, 0);
 
   if (fe == NULL) {
@@ -102,8 +103,8 @@ struct aggregator *aggregator_create() {
     TAILQ_INIT(&fe[i].head);
   }
 
-  struct aggregator *agg =
-      rte_zmalloc("aggregator", sizeof(struct aggregator), 0);
+  agg = (struct aggregator *)rte_zmalloc(
+      "aggregator", sizeof(struct aggregator), 0);
 
   if (agg == NULL) {
     rte_free(fe);
@@ -116,7 +117,9 @@ struct aggregator *aggregator_create() {
   agg->entries = fe;
   TAILQ_INIT(&agg->ready_queue);
   TAILQ_INIT(&agg->flow_list);
-  agg->flow_burst_max = 16;
+  agg->flow_burst_max = 3;
+  agg->batch_cnt = 0;
+  agg->batch_total = 0;
   agg->buffer_time_us = 16;
 
   agg->pool = packet_mbuf_mempool_create();
@@ -168,6 +171,7 @@ uint16_t aggregator_rx_burst(struct aggregator *agg, uint16_t port_id,
     }
   }
   m = NULL;
+  aggregator_schedule(agg);
   while (cnt < nb_pkts) {
     m = aggregator_get_packet_from_ready_queue(agg);
     if (m == NULL) {
@@ -190,6 +194,10 @@ void aggregator_schedule(struct aggregator *agg) {
       // get batch
       TAILQ_CONCAT(&agg->ready_queue, &fe->head, tailq);
       TAILQ_REMOVE(&agg->flow_list, fe, tailq);
+      agg->batch_cnt++;
+      agg->batch_total += fe->pkt_cnt;
+      fe->pkt_cnt=0;
+      fe->total_byte_count = 0;
       // it's important to delete key here
       rte_hash_del_key(agg->cucko_hashtable, &fe->tuple);
     } else {
@@ -283,8 +291,10 @@ struct rte_mbuf *aggregator_rx_one_packet(struct aggregator *agg,
     TAILQ_CONCAT(&agg->ready_queue, &e->head, tailq);
     TAILQ_REMOVE(&agg->flow_list, e, tailq);
     rte_hash_del_key(agg->cucko_hashtable, &tuple);
-
+    agg->batch_cnt++;
+    agg->batch_total += e->pkt_cnt;
     e->pkt_cnt = 0;
+    e->total_byte_count = 0;
   }
   e->total_byte_count += pkt->data_len;
 

@@ -37,7 +37,8 @@ static void load_packet(struct pktgen_pcap *ctx) {
   const unsigned char *pkt = NULL;
   int idx = 0;
 
-  ctx->pkts = calloc(ctx->total_pkt_cnt, sizeof(struct packet));
+  ctx->pkts =
+      (struct packet *)calloc(ctx->total_pkt_cnt, sizeof(struct packet));
   ctx->cur_idx = 0;
   if (ctx->pkts == NULL) {
     rte_exit(EXIT_FAILURE, "failed to allocate pkts\n");
@@ -62,7 +63,8 @@ static void load_packet(struct pktgen_pcap *ctx) {
   pcap_close(p);
 }
 struct pktgen_pcap *pktgen_pcap_create() {
-  struct pktgen_pcap *p = calloc(1, sizeof(struct pktgen_pcap));
+  struct pktgen_pcap *p =
+      (struct pktgen_pcap *)calloc(1, sizeof(struct pktgen_pcap));
   if (!p) {
     rte_exit(EXIT_FAILURE, "cannot allocate pktgen_pcap\n");
   }

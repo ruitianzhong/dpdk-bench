@@ -5,8 +5,10 @@
 #include "../dpdk_app.h"
 
 struct router* router_create() {
-  struct router* r = rte_zmalloc("router", sizeof(struct router), 0);
+  struct router* r =
+      (struct router*)rte_zmalloc("router", sizeof(struct router), 0);
   assert(r != NULL);
+  r->result = -1;
   return r;
 }
 
@@ -29,8 +31,13 @@ static struct ipv4_5tuple extract_tuple_from_udp(struct rte_mbuf* m) {
   return tuple;
 }
 
+
+
 int router_search(struct router* r, struct rte_mbuf* m) {
   struct ipv4_5tuple tuple = extract_tuple_from_udp(m);
+  if (r->result != -1 && tuple_equal(&tuple, &r->tuple)) {
+    return r->result;
+  }
   for (int i = 0; i < MAX_ROUTE_TABLE_SIZE; i++) {
     struct route_table_entry* e = &r->tables[i];
     uint32_t mask = ~((1 << (32 - e->mask)) - 1);
@@ -38,6 +45,7 @@ int router_search(struct router* r, struct rte_mbuf* m) {
       // Match
     }
   }
+  return 0;
 }
 
 void router_process_burst(struct router* r, struct rte_mbuf** mbuf, int len) {

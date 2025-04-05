@@ -20,10 +20,12 @@ struct flow_counter* flow_counter_create() {
   if (ht == NULL) {
     rte_panic("Can not allocate rte_hash\n");
   }
-  struct flow_counter* fc = rte_zmalloc("fc", sizeof(struct flow_counter), 0);
+  struct flow_counter* fc =
+      (struct flow_counter*)rte_zmalloc("fc", sizeof(struct flow_counter), 0);
   assert(fc != NULL);
   fc->flow_table = ht;
   TAILQ_INIT(&fc->flow_list);
+  fc->cache_idx = -1;
   return fc;
 }
 
@@ -62,15 +64,31 @@ static void check(struct flow_counter* fc) {
   }
 }
 
+static void update_fc(struct flow_counter_entry* fe, struct rte_mbuf* m) {
+  fe->byte_cnt += m->data_len;
+  fe->pkt_cnt++;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  fe->last_seen_sec = tv.tv_sec;
+}
+
 void flow_counter_process_packet_burst(struct flow_counter* fc,
                                        struct rte_mbuf** bufs, int len) {
   for (int i = 0; i < len; i++) {
     struct rte_mbuf* m = bufs[i];
     struct ipv4_5tuple tuple = extract_tuple_from_udp(m);
+    struct flow_counter_entry* fe = NULL;
+
+    if (fc->cache_idx != -1 &&
+        (memcmp(&tuple, &fc->cache_tuple, sizeof(struct ipv4_5tuple)) == 0)) {
+      fe = &fc->entries[fc->cache_idx];
+      update_fc(fe, m);
+      check(fc);
+      continue;
+    }
 
     int ret = rte_hash_lookup(fc->flow_table, &tuple);
 
-    struct flow_counter_entry* fe = NULL;
     if (ret < 0) {
       ret = rte_hash_add_key(fc->flow_table, &tuple);
       assert(ret >= 0);
@@ -86,11 +104,9 @@ void flow_counter_process_packet_burst(struct flow_counter* fc,
       TAILQ_REMOVE(&fc->flow_list, fe, tailq);
       TAILQ_INSERT_TAIL(&fc->flow_list, fe, tailq);
     }
-    fe->byte_cnt += m->data_len;
-    fe->pkt_cnt++;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    fe->last_seen_sec = tv.tv_sec;
+    fc->cache_idx = ret;
+    fc->cache_tuple = tuple;
+    update_fc(fe, m);
     check(fc);
   }
 }

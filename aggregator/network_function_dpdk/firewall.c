@@ -188,7 +188,8 @@ void read_acl_from_file(char *filename, struct acl_ipv4_rule *rules,
 struct firewall *firewall_create() {
   struct firewall *fw;
   printf("\n************ FIREWALL INIT ****************\n\n");
-  fw = rte_zmalloc("firewall_ctx", sizeof(struct firewall), 0);
+  fw = (struct firewall *)rte_zmalloc("firewall_ctx", sizeof(struct firewall),
+                                      0);
 
   if (NULL == fw) {
     rte_exit(EXIT_FAILURE, "failed to allocate firewall");
@@ -204,8 +205,8 @@ struct firewall *firewall_create() {
       .max_rule_num = MAX_ACL_RULES,
   };
 
-  struct acl_ipv4_rule *acl_rules =
-      rte_malloc("acl_rule", sizeof(struct acl_ipv4_rule) * MAX_ACL_RULES, 0);
+  struct acl_ipv4_rule *acl_rules = (struct acl_ipv4_rule *)rte_malloc(
+      "acl_rule", sizeof(struct acl_ipv4_rule) * MAX_ACL_RULES, 0);
 
   if (acl_rules == NULL) {
     rte_panic("not enough memory");
@@ -236,8 +237,8 @@ struct firewall *firewall_create() {
   fw->acl_ctx = acx;
   fw->num_rule = 0;
   fw->num_ipv4 = 0;
-  fw->acl_entries =
-      rte_zmalloc("acl_entries", sizeof(struct acl_entry) * MAX_ACL_RULES, 0);
+  fw->acl_entries = (struct acl_entry *)rte_zmalloc(
+      "acl_entries", sizeof(struct acl_entry) * MAX_ACL_RULES, 0);
   if (fw->acl_entries == NULL) {
     rte_panic("can not allocate acl entries\n");
   }
@@ -328,7 +329,8 @@ static void fill_packets(struct thread_context *ctx) {
     m->nb_segs = 1;
     m->next = NULL;
 
-    struct packet *p = pktgen_pcap_get_packet(ctx->send_priv_data);
+    struct packet *p =
+        pktgen_pcap_get_packet((struct pktgen_pcap *)ctx->send_priv_data);
 
     memcpy(eth, p->data, offset);
     // just for experiment here
@@ -480,7 +482,8 @@ static void firewall_receiver(thread_context_t *ctx) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
     for (int i = 0; i < 1; i++)
-      firewall_process_packet_burst(ctx->recv_priv_data, ctx->rx_pkts, ret);
+      firewall_process_packet_burst((struct firewall *)ctx->recv_priv_data,
+                                    ctx->rx_pkts, ret);
 
     echo_back(ctx->rx_pkts, ret);
 
