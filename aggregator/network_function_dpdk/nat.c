@@ -73,6 +73,7 @@ struct nat *nat_create() {
     TAILQ_INSERT_TAIL(&nat->free_list, entry, tailq);
   }
   nat->cache_idx = -1;
+  nat->ht_lan2wan = hash_table_create(1000);
   return nat;
 }
 
@@ -143,8 +144,14 @@ void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
 
     int ret = rte_hash_lookup(nat->lan2wan, &lan2wan);
 
+    struct lan2wan_entry *data =
+        (struct lan2wan_entry *)hash_table_look_up(nat->ht_lan2wan, lan2wan);
     if (ret < 0) {
+      assert(data == NULL);
       ret = rte_hash_add_key(nat->lan2wan, &lan2wan);
+      struct lan2wan_entry *temp = malloc(sizeof(struct lan2wan_entry));
+      assert(temp != NULL);
+      hash_table_insert(nat->ht_lan2wan, lan2wan, temp);
 
       entry = &nat->l2w_entries[ret];
 

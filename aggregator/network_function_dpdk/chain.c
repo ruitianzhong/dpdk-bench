@@ -43,7 +43,7 @@
   Code obtained from one_way
 */
 
-#define BURST_TX_DRAIN_US 60
+#define BURST_TX_DRAIN_US 10
 #define GBPS 25
 #define MAX_INFLIGHT_PACKET (128 * 1)
 

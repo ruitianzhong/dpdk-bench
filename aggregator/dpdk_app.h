@@ -3,6 +3,23 @@
 
 #include "aggregator.h"
 
+struct hash_element {
+  TAILQ_ENTRY(hash_element) tailq;
+  struct ipv4_5tuple tuple;
+  void *data;
+};
+TAILQ_HEAD(hash_head, hash_element);
+
+struct hash_bucket {
+  struct hash_head head;
+  int cnt;
+};
+
+struct hash_table {
+  struct hash_bucket *buckets;
+  int nb_buckets;
+};
+
 struct acl_entry {
   int cnt;
 };
@@ -64,6 +81,8 @@ struct flow_counter {
   struct ipv4_5tuple cache_tuple;
 
   int cache_idx;
+
+  struct hash_table *ht;
 };
 
 struct flow_counter *flow_counter_create();
@@ -110,10 +129,17 @@ struct nat {
   uint64_t last_check_time_sec;
   struct ipv4_5tuple cache_tuple;
   int cache_idx;
+  struct hash_table *ht_lan2wan;
 };
+
+struct hash_table *hash_table_create(int nb_buckets);
+void hash_table_free(struct hash_table *ht);
 
 struct nat *nat_create();
 void nat_free(struct nat *nat);
 
 void nat_process_packet_burst(struct nat *nat, struct rte_mbuf **bufs,
                               size_t length);
+void hash_table_insert(struct hash_table *ht, struct ipv4_5tuple tuple,
+                       void *data);
+void *hash_table_look_up(struct hash_table *ht, struct ipv4_5tuple tuple);

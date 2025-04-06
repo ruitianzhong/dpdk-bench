@@ -26,11 +26,14 @@ struct flow_counter* flow_counter_create() {
   fc->flow_table = ht;
   TAILQ_INIT(&fc->flow_list);
   fc->cache_idx = -1;
+  fc->ht = hash_table_create(1000);
+  assert(fc->ht != NULL);
   return fc;
 }
 
 void flow_counter_free(struct flow_counter* fc) {
   rte_hash_free(fc->flow_table);
+  hash_table_free(fc->ht);
   rte_free(fc);
 }
 
@@ -89,9 +92,18 @@ void flow_counter_process_packet_burst(struct flow_counter* fc,
 
     int ret = rte_hash_lookup(fc->flow_table, &tuple);
 
+    fe = hash_table_look_up(fc->ht, tuple);
+
+
     if (ret < 0) {
+      assert(fe == NULL);
       ret = rte_hash_add_key(fc->flow_table, &tuple);
       assert(ret >= 0);
+      struct flow_counter_entry* temp =
+          malloc(sizeof(struct flow_counter_entry));
+      assert(temp != NULL);
+      hash_table_insert(fc->ht, tuple, temp);
+
       fe = &fc->entries[ret];
       fe->byte_cnt = 0;
       fe->pkt_cnt = 0;

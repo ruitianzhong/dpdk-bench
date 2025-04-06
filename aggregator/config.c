@@ -4,7 +4,7 @@ struct config CONFIG = {
     .fw_rules_file_name = "./rules/fw.rules",
     .app = NULL,
     .slf = 1,
-    .enable_aggregate = 1,
+    .enable_aggregate = 0,
 };
 
 static void init_app(char *app_name) {
@@ -16,7 +16,7 @@ static void init_app(char *app_name) {
     CONFIG.app = &firewall_app;
   } else if (strncmp(app_name, "nat", 4) == 0) {
     CONFIG.app = &nat_app;
-  } else if (strncmp(app_name,"chain",6)==0){
+  } else if (strncmp(app_name, "chain", 6) == 0) {
     CONFIG.app = &chain_app;
   } else {
     rte_exit(EXIT_FAILURE, "unknown app name %s\n", app_name);
@@ -62,6 +62,18 @@ void parse_args(int argc, char **argv) {
         rte_exit(EXIT_FAILURE, "Bad slf=%d\n", slf);
       }
       CONFIG.slf = slf;
+      i += 2;
+    } else if (strncmp(argv[i], "--enable-aggregator", 20) == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument\n");
+      }
+
+      if (argv[i + 1][0] == '0') {
+        CONFIG.enable_aggregate = 0;
+      } else {
+        CONFIG.enable_aggregate = 1;
+      }
+
       i += 2;
     } else {
       rte_exit(EXIT_FAILURE, "unrecognized option: %s\n", argv[i]);
