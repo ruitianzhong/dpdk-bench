@@ -24,7 +24,7 @@
 #define MAX_CORE_NUM 40
 #define NB_MBUF 8192
 #define MEMPOOL_CACHE_SIZE 256
-#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 500000)
+#define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 100000)
 // #define TOTAL_PACKET_COUNT (MAX_PKT_BURST * 200)
 #define QUEUE_PER_PORT 1
 
@@ -122,6 +122,7 @@ struct config {
   struct dpdk_app *app;
   uint32_t slf;
   bool enable_aggregate;
+  int sender_throughput;
 };
 extern struct config CONFIG;
 

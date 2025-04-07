@@ -44,7 +44,6 @@
 */
 
 #define BURST_TX_DRAIN_US 10
-#define GBPS 25
 #define MAX_INFLIGHT_PACKET (128 * 1)
 
 struct chain {
@@ -53,7 +52,6 @@ struct chain {
   struct nat *nat;
   struct router *route;
   struct aggregator *agg;
-  struct router *routers[5];
 };
 
 struct chain * chain_create(){
@@ -64,10 +62,6 @@ struct chain * chain_create(){
   c->route = router_create();
   c->fw = firewall_create();
   c->agg = aggregator_create();
-
-  for (int i = 0; i < 5; i++) {
-    c->routers[i] = router_create();
-  }
 
   return c;
 }
@@ -144,8 +138,13 @@ static void chain_sender(thread_context_t *ctx) {
   int cnt = 0;
   uint64_t back_pressure_cnt = 0;
 
-  const uint64_t drain_tsc =
-      ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) * 256 / GBPS;
+  const uint64_t drain_tsc = ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) *
+                             256 / CONFIG.sender_throughput;
+  // const uint64_t drain_tsc = ((rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S) *
+  //                            8 / CONFIG.sender_throughput;
+
+
+  uint64_t zero_cnt = 0;
 
   uint64_t prev_tsc = 0, cur_tsc = 0, difftsc;
   printf("sender start\n");
@@ -162,7 +161,7 @@ static void chain_sender(thread_context_t *ctx) {
 
     difftsc = cur_tsc - prev_tsc;
     // if (inflight_packet < MAX_INFLIGHT_PACKET && cnt < TOTAL_PACKET_COUNT) {
-    if (difftsc > drain_tsc && cnt + MAX_PKT_BURST <= TOTAL_PACKET_COUNT &&
+    if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT &&
         inflight_packet < MAX_INFLIGHT_PACKET) {
       // if (difftsc > drain_tsc && cnt < TOTAL_PACKET_COUNT) {
       int budget = MAX_PKT_BURST;
@@ -243,8 +242,6 @@ static void chain_receiver(thread_context_t *ctx) {
   uint64_t pure_process_time = 0, pure_start = 0;
   struct chain *chain = (struct chain *)ctx->recv_priv_data;
   while (cnt < TOTAL_PACKET_COUNT) {
-    pure_start = rte_get_tsc_cycles();
-
 
     if (!CONFIG.enable_aggregate)
     ret = rte_eth_rx_burst(ctx->port_id, ctx->queue_id, ctx->rx_pkts,
@@ -253,6 +250,7 @@ static void chain_receiver(thread_context_t *ctx) {
       ret = aggregator_rx_burst(chain->agg, ctx->port_id, ctx->queue_id,
                                 ctx->rx_pkts, MAX_PKT_BURST);
 
+    pure_start = rte_get_tsc_cycles();
 
     if (ret < 0) {
       break;
@@ -283,8 +281,9 @@ static void chain_receiver(thread_context_t *ctx) {
     pure_process_time += (rte_get_tsc_cycles() - pure_start);
 
     echo_back(ctx->rx_pkts, ret);
-    send_all(ctx, ctx->rx_pkts, ret);
     end = rte_get_tsc_cycles();
+
+    send_all(ctx, ctx->rx_pkts, ret);
   }
   double us = ((double)(end - start)) / (double)hz;
 

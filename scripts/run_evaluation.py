@@ -6,7 +6,6 @@ import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.ticker import MultipleLocator
 
-
 def run_back2back(app_name, gbps, enable_aggregator):
     assert (1 <= gbps <= 40)
 
@@ -19,32 +18,39 @@ def run_back2back(app_name, gbps, enable_aggregator):
 
     print(cmdline)
     cmdline = cmdline.split()
+    repeat = 1
+    xput = 0.0
+    latency = 0.0
+    cycle = 0.0
+
     try:
-        result = subprocess.run(cmdline, check=True,
+        for _ in range(0, repeat):
+
+            result = subprocess.run(cmdline, check=True,
                                 capture_output=True, text=True)
-        # print(result)
-        lines = result.stdout.split("\n")
-        for line in lines:
-            ret = re.findall(r"average latency: (\S+)", line)
+            # print(result)
+            lines = result.stdout.split("\n")
+            for line in lines:
+                ret = re.findall(r"average latency: (\S+)", line)
 
-            if len(ret) == 1:
-                print(line)
-                latency = float(ret[0])
+                if len(ret) == 1:
+                    print(line)
+                    latency += float(ret[0])
 
-            ret = re.findall(r"Throughput: (\S+)", line)
+                ret = re.findall(r"Throughput: (\S+)", line)
 
-            if len(ret) == 1:
-                xput = float(ret[0])
+                if len(ret) == 1:
+                    xput += float(ret[0])
 
-            ret = re.findall(r"average cycle (\S+)", line)
+                ret = re.findall(r"average cycle (\S+)", line)
 
-            if len(ret) == 1:
-                cycle = float(ret[0])
+                if len(ret) == 1:
+                    cycle += float(ret[0])
 
         result = {}
-        result['latency'] = latency
-        result['throughput'] = xput
-        result['cycle'] = cycle
+        result['latency'] = latency/float(repeat)
+        result['throughput'] = xput/float(repeat)
+        result['cycle'] = cycle/float(repeat)
         print(f'Done! {result}')
 
         return result
@@ -78,16 +84,24 @@ def generate_throughput_figure(with_agg_results, without_agg_results):
     x = [result[0] for result in with_agg_results]
     with_agg_y = [result[1]['throughput'] for result in with_agg_results]
     without_agg_y = [result[1]['throughput'] for result in without_agg_results]
-    print_figure(x, with_agg_y, "w/ agg", without_agg_y, 'w/o agg', 'Throughput',
-                 'Generator targeted bandwith', 'throughput', 'throughput.png')
+    print_figure(x, with_agg_y, "w/ aggregator", without_agg_y, 'w/o aggregator', '',
+                 'Offered Load (Gbps)', 'Network Function Throughput (Gbps)', 'throughput.png')
 
 
-def generate_latency_figure():
-    pass
+def generate_latency_figure(with_agg_results, without_agg_results):
+    x = [result[0] for result in with_agg_results]
+    with_agg_y = [result[1]['latency'] for result in with_agg_results]
+    without_agg_y = [result[1]['latency'] for result in without_agg_results]
+    print_figure(x, with_agg_y, "w/ aggregator", without_agg_y, 'w/o aggregator', '',
+                 'Offered Load (Gbps)', '', 'latency.png')
 
 
-def generate_cycle_figure():
-    pass
+def generate_cycle_figure(with_agg_results, without_agg_results):
+    x = [result[0] for result in with_agg_results]
+    with_agg_y = [result[1]['cycle'] for result in with_agg_results]
+    without_agg_y = [result[1]['cycle'] for result in without_agg_results]
+    print_figure(x, with_agg_y, "w/ aggregator", without_agg_y, 'w/o aggregator', '',
+                 'Offered Load (Gbps)', 'Average CPU Cycles Per Packet', 'cycle.png')
 
 
 def generate_back2back_figure():
@@ -96,18 +110,20 @@ def generate_back2back_figure():
 
 def main():
     print(run_back2back("chain", 25, True))
-    print(run_back2back("chain", 25, True))
+    # print(run_back2back("chain", 25, True))
 
     with_agg_results = []
     without_agg_results = []
 
-    for i in range(1, 40):
+    for i in range(1, 30):
        result = run_back2back("chain", i, True)
        with_agg_results.append((i, result))
        result = run_back2back("chain", i, False)
        without_agg_results.append((i, result))
 
     generate_throughput_figure(with_agg_results, without_agg_results)
+    generate_latency_figure(with_agg_results, without_agg_results)
+    generate_cycle_figure(with_agg_results, without_agg_results)
 
 
 if __name__ == "__main__":

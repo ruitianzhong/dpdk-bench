@@ -5,6 +5,7 @@ struct config CONFIG = {
     .app = NULL,
     .slf = 1,
     .enable_aggregate = 0,
+    .sender_throughput = -1,
 };
 
 static void init_app(char *app_name) {
@@ -75,8 +76,22 @@ void parse_args(int argc, char **argv) {
       }
 
       i += 2;
+    } else if (strncmp(argv[i], "--gbps", 6) == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument\n");
+      }
+      int gbps = atoi(argv[i + 1]);
+      assert(gbps >= 1 && gbps <= 40);
+      CONFIG.sender_throughput = gbps;
+      printf("targeted sender throughput will be %d Gbps\n",gbps);
+      i += 2;
+
     } else {
       rte_exit(EXIT_FAILURE, "unrecognized option: %s\n", argv[i]);
     }
+  }
+
+  if (CONFIG.sender_throughput == -1) {
+    rte_exit(EXIT_FAILURE, "please set the sender throughput\n");
   }
 }
