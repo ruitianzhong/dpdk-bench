@@ -107,6 +107,11 @@ def generate_cycle_figure(with_agg_results, without_agg_results):
 def generate_back2back_figure():
     pass
 
+def do_preparation():
+    cmdline= "./scripts/generate_testing_flow"
+    cmdline = cmdline.split()
+    subprocess.run(cmdline, check=True)
+    print("Preparation done!")
 
 def do_evaluation():
     print(run_back2back("chain", 25, True))
@@ -131,5 +136,10 @@ def do_evaluation():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--prepare", action="store_true", default=False)
+    parser.add_argument("--run", action="store_true", default=False)
     args = parser.parse_args()
-    do_evaluation()
+    if args.prepare:
+        do_preparation()
+    if args.run:
+        do_evaluation()

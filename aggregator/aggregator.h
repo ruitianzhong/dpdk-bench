@@ -112,8 +112,6 @@ enum {
 
 extern struct dpdk_app one_way_app;
 extern struct dpdk_app echo_app;
-extern struct dpdk_app firewall_app;
-extern struct dpdk_app nat_app;
 extern struct dpdk_app chain_app;
 
 struct config {

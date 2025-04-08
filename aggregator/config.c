@@ -13,10 +13,6 @@ static void init_app(char *app_name) {
     CONFIG.app = &one_way_app;
   } else if (strncmp(app_name, "echo", 5) == 0) {
     CONFIG.app = &echo_app;
-  } else if (strncmp(app_name, "firewall", 9) == 0) {
-    CONFIG.app = &firewall_app;
-  } else if (strncmp(app_name, "nat", 4) == 0) {
-    CONFIG.app = &nat_app;
   } else if (strncmp(app_name, "chain", 6) == 0) {
     CONFIG.app = &chain_app;
   } else {
