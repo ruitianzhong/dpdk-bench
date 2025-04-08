@@ -42,6 +42,20 @@ void print_address_info(ipv4 *ip_p, udp *udp_p) {
   std::cout << std::endl;
 }
 
+struct {
+  std::string filename;
+  bool cache;
+} CONFIG;
+
+NetworkTuple cached_tuple_key;
+SNATContext *cached_context = nullptr;
+
+bool tuple_equal(NetworkTuple &tuple1, NetworkTuple &tuple2) {
+  return tuple1.dst_ip == tuple2.dst_ip && tuple1.src_ip == tuple2.src_ip &&
+         tuple1.proto == tuple2.proto && tuple1.src_port == tuple2.src_port &&
+         tuple1.dst_port == tuple2.dst_port;
+}
+
 void process_packet(Packet *packet) {
   if (nullptr == packet) {
     throw "Null pointer to Packet";
@@ -65,37 +79,51 @@ void process_packet(Packet *packet) {
   tu.dst_port = ntohs(udp_p->dport);
   tu.src_port = ntohs(udp_p->sport);
   SNATContext *ctx = nullptr;
-  // Miss
-  auto iter = snat_map.find(tu);
 
-  if (iter == snat_map.end()) {
-    if (current_port == MAX_PORT_NUM) {
-      throw "No port is available";  // FIXME in the future
-    }
-    int port = current_port++;
-    SNATContext *sctx = new SNATContext();
-    sctx->src_ip = MAKE_IP_ADDR(8, 8, 8, 8);
-    sctx->src_port = port;
-    // SNAT setup
-    snat_map[tu] = sctx;
-
-    // DNAT setup,we do not use it for now
-    NetworkTuple reverse_tuple;
-    reverse_tuple.dst_ip = MAKE_IP_ADDR(8, 8, 8, 8);
-    reverse_tuple.src_ip = tu.dst_ip;
-    reverse_tuple.src_port = tu.dst_port;
-    reverse_tuple.dst_port = port;
-
-    DNATContext *dctx = new DNATContext();
-    dctx->dst_ip = tu.src_ip;
-    dctx->dst_port = tu.src_port;
-
-    dnat_map[reverse_tuple] = dctx;
-    // reduce the number of hash table search
-    ctx = sctx;
-    miss_cnt++;
+  if (CONFIG.cache && cached_context != nullptr &&
+      tuple_equal(tu, cached_tuple_key)) {
+    ctx = cached_context;
   } else {
-    ctx = iter->second;
+    // Miss
+    auto iter = snat_map.find(tu);
+
+    if (iter == snat_map.end()) {
+      if (current_port == MAX_PORT_NUM) {
+        throw "No port is available";  // FIXME in the future
+      }
+      int port = current_port++;
+      SNATContext *sctx = new SNATContext();
+      sctx->src_ip = MAKE_IP_ADDR(8, 8, 8, 8);
+      sctx->src_port = port;
+      // SNAT setup
+      snat_map[tu] = sctx;
+
+      // DNAT setup,we do not use it for now
+      NetworkTuple reverse_tuple;
+      reverse_tuple.dst_ip = MAKE_IP_ADDR(8, 8, 8, 8);
+      reverse_tuple.src_ip = tu.dst_ip;
+      reverse_tuple.src_port = tu.dst_port;
+      reverse_tuple.dst_port = port;
+
+      DNATContext *dctx = new DNATContext();
+      dctx->dst_ip = tu.src_ip;
+      dctx->dst_port = tu.src_port;
+
+      dnat_map[reverse_tuple] = dctx;
+      // reduce the number of hash table search
+      ctx = sctx;
+      if (CONFIG.cache) {
+        cached_context = ctx;
+        cached_tuple_key = tu;
+      }
+      miss_cnt++;
+    } else {
+      ctx = iter->second;
+      if (CONFIG.cache) {
+        cached_context = ctx;
+        cached_tuple_key = tu;
+      }
+    }
   }
 
   ip_p->ip_src = htonl(ctx->src_ip);
@@ -136,16 +164,41 @@ __inline__ uint64_t perf_counter(void) {
   return r;
 }
 
-int main(int argc, char const *argv[]) {
-  if (argc < 2) {
-    std::cout << "Usage: ./nat <pcap file path>" << std::endl;
-    exit(EXIT_FAILURE);
+
+void parse_config(int argc, char const *argv[]) {
+  int i = 1;
+  CONFIG.cache = 0;
+  CONFIG.filename = "";
+  while (i < argc) {
+    std::string s(argv[i]);
+    if (s == "--pcap") {
+      if (i + 1 >= argc) {
+        exit(EXIT_FAILURE);
+      }
+      CONFIG.filename = argv[i + 1];
+      i += 2;
+    } else if (s == "--enable-cache") {
+      if (i + 1 >= argc) {
+        exit(EXIT_FAILURE);
+      }
+      if (argv[i + 1][0] == '0') {
+        CONFIG.cache = false;
+      } else {
+        CONFIG.cache = true;
+      }
+
+      i += 2;
+    }
   }
+}
+
+int main(int argc, char const *argv[]) {
+  parse_config(argc, argv);
   struct timeval start_time, end_time;
   uint64_t total_us = 0;
   uint64_t cnt = 0;
   // load the data before processing
-  PacketsLoader pl = PacketsLoader(std::string(argv[1]), 10000);
+  PacketsLoader pl = PacketsLoader(std::string(CONFIG.filename), 10000);
   std::cout << "NAT processing start" << std::endl;
   gettimeofday(&start_time, NULL);
   // the killer microsecond
@@ -163,7 +216,8 @@ int main(int argc, char const *argv[]) {
 
   std::cout << "Total time is " << total_us << std::endl;
   std::cout << "Average time per packet: "
-            << double(total_us) / double(pl.get_total_packets()) << std::endl;
+            << 1000.0 * double(total_us) / double(pl.get_total_packets())
+            << " ns" << std::endl;
   std::cout << "Total Packest handled: " << cnt << " miss " << miss_cnt
             << std::endl;
   teardown();

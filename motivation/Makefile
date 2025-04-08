@@ -3,15 +3,14 @@ CXX := g++
 
 .PHONY: clean
 
-nat: nat_udp_v4 util_target
+all: nat
+nat: nat_ipv4.o packet.o
 	${CXX} ${CXXFLAGS} -o nat  nat_ipv4.o packet.o -lpcap
 
-
-nat_udp_v4: nat_ipv4.cpp
+nat_ipv4.o: nat_ipv4.cpp Makefile
 	${CXX} -c ${CXXFLAGS} nat_ipv4.cpp
 
-
-util_target: util/packet.cpp util/common.hpp
+packet.o: util/packet.cpp util/common.hpp Makefile
 	${CXX} -c ${CXXFLAGS} util/packet.cpp
 
 clean:

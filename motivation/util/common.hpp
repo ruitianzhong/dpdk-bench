@@ -101,7 +101,7 @@ class PacketsLoader {
  public:
   explicit PacketsLoader(std::string &&filepath, uint64_t loop_back_time = 1);
 
-  PacketsLoader(PacketsLoader &) = delete;
+  // PacketsLoader(PacketsLoader &) = delete;
   // return nullptr if there is no more packet
   Packet *get_next_packet();
 
