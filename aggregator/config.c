@@ -85,6 +85,32 @@ void parse_args(int argc, char **argv) {
       printf("targeted sender throughput will be %d Gbps\n",gbps);
       i += 2;
 
+    } else if (strcmp(argv[i], "--access-byte-per-packet") == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument");
+      }
+      CONFIG.access_byte_per_packet = atoi(argv[i + 1]);
+      assert(CONFIG.access_byte_per_packet >= 0);
+      i += 2;
+    } else if (strcmp(argv[i], "--delay-cycle") == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument");
+      }
+
+      CONFIG.miss_penalty_cycle = atoi(argv[i + 1]);
+      assert(CONFIG.miss_penalty_cycle >= 0);
+      i += 2;
+    }else if (strcmp(argv[i], "--ablation") == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument");
+      }
+
+      if (argv[i + 1][0] == '1') {
+        CONFIG.ablation = true;
+      } else {
+        CONFIG.ablation = false;
+      }
+      i += 2;
     } else {
       rte_exit(EXIT_FAILURE, "unrecognized option: %s\n", argv[i]);
     }

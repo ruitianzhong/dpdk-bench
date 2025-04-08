@@ -6,3 +6,5 @@ network-function/scripts/.idea
 build
 *.dump
 *.rules
+*.data
+*.data.old

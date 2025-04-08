@@ -276,7 +276,7 @@ static void ablation_process_burst(struct chain *chain, struct rte_mbuf **mbuf,
       // memory access test
       int ret = rte_hash_lookup(chain->flow_table, &tuple);
 
-      if (ret == -1) {
+      if (ret < 0) {
         ret = rte_hash_add_key(chain->flow_table, &tuple);
         assert(ret >= 0);
         chain->data[ret] =
@@ -284,20 +284,24 @@ static void ablation_process_burst(struct chain *chain, struct rte_mbuf **mbuf,
         assert(chain->data[ret] != NULL);
       }
       char *p = chain->data[ret];
+      assert(p != NULL);
       for (int i = 0; i < CONFIG.access_byte_per_packet; i++) {
         char c = p[i];
         c++;
         p[i] = c;
       }
 
-    } else {
+    } else if (CONFIG.miss_penalty_cycle > 0) {
       if (chain->have_cache && tuple_equal(&tuple, &chain->cached_tuple)) {
-        // Hit
+        // Hit (No Operation here)
       } else {
         // Miss penalty here
         chain->have_cache = true;
         chain->cached_tuple = tuple;
-      }
+        uint64_t target = rte_get_tsc_cycles() + CONFIG.miss_penalty_cycle;
+        // delay the configured cycles
+        while (target > rte_get_tsc_cycles());
+            }
     }
   }
 }
