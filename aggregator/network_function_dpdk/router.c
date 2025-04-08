@@ -31,8 +31,6 @@ static struct ipv4_5tuple extract_tuple_from_udp(struct rte_mbuf* m) {
   return tuple;
 }
 
-
-
 int router_search(struct router* r, struct rte_mbuf* m) {
   struct ipv4_5tuple tuple = extract_tuple_from_udp(m);
   if (r->result != -1 && tuple_equal(&tuple, &r->tuple)) {

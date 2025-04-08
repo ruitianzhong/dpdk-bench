@@ -33,12 +33,12 @@ void hash_table_insert(struct hash_table* ht, struct ipv4_5tuple tuple,
   struct hash_element* element = NULL;
   TAILQ_FOREACH(element, &ht->buckets[key].head, tailq) {
     if (tuple_equal(&tuple, &element->tuple)) {
-      printf("match\n");
-      return;
+      rte_panic("match\n");
     }
   }
   element = calloc(1, sizeof(struct hash_element));
   element->data = data;
+  element->tuple = tuple;  // fix bug here
   assert(element != NULL);
   TAILQ_INSERT_TAIL(&ht->buckets[key].head, element, tailq);
   return;

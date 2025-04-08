@@ -1,29 +1,9 @@
 #include <errno.h>
-#include <rte_debug.h>
-#include <rte_eal.h>
-#include <rte_ethdev.h>
-#include <rte_ether.h>
-#include <rte_hash.h>
-#include <rte_hash_crc.h>
-#include <rte_ip.h>
-#include <rte_launch.h>
-#include <rte_lcore.h>
-#include <rte_memory.h>
-#include <rte_mempool.h>
-#include <rte_per_lcore.h>
-#include <rte_spinlock.h>
-#include <rte_tcp.h>
-#include <rte_udp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/queue.h>
-
-#define DEFAULT_HASH_FUNC rte_hash_crc
-#include <rte_acl.h>
-#include <rte_memory.h>
-#include <stddef.h>
-#include <stdio.h>
 
 #include "../aggregator.h"
 #include "../dpdk_app.h"

@@ -1,38 +1,20 @@
-#include <rte_hash_crc.h>
-#include <rte_malloc.h>
-#include <rte_mbuf.h>
 #include <sys/time.h>
 
 #include "../aggregator.h"
 #include "../dpdk_app.h"
 
 struct flow_counter* flow_counter_create() {
-  struct rte_hash* ht;
-  struct rte_hash_parameters param = {
-      .key_len = sizeof(struct ipv4_5tuple),
-      .name = "flow_counter",
-      .socket_id = rte_socket_id(),
-      .hash_func = rte_hash_crc,
-      .entries = MAX_FLOW_NUM,
-      .hash_func_init_val = 0,
-  };
-  ht = rte_hash_create(&param);
-  if (ht == NULL) {
-    rte_panic("Can not allocate rte_hash\n");
-  }
   struct flow_counter* fc =
       (struct flow_counter*)rte_zmalloc("fc", sizeof(struct flow_counter), 0);
   assert(fc != NULL);
-  fc->flow_table = ht;
   TAILQ_INIT(&fc->flow_list);
-  fc->cache_idx = -1;
+  fc->cached_entry = NULL;
   fc->ht = hash_table_create(1000);
   assert(fc->ht != NULL);
   return fc;
 }
 
 void flow_counter_free(struct flow_counter* fc) {
-  rte_hash_free(fc->flow_table);
   hash_table_free(fc->ht);
   rte_free(fc);
 }
@@ -59,8 +41,8 @@ static void check(struct flow_counter* fc) {
   while (!TAILQ_EMPTY(&fc->flow_list)) {
     struct flow_counter_entry* fe = TAILQ_FIRST(&fc->flow_list);
     gettimeofday(&tv, NULL);
-    if (fe->last_seen_sec + 10 < tv.tv_sec) {
-      rte_panic("eviction not implemented\n");
+    if (fe->last_seen_sec + 100 < tv.tv_sec) {
+      rte_panic("eviction not implemented in flow counter\n");
     } else {
       break;
     }
@@ -82,42 +64,32 @@ void flow_counter_process_packet_burst(struct flow_counter* fc,
     struct ipv4_5tuple tuple = extract_tuple_from_udp(m);
     struct flow_counter_entry* fe = NULL;
 
-    if (fc->cache_idx != -1 &&
-        (memcmp(&tuple, &fc->cache_tuple, sizeof(struct ipv4_5tuple)) == 0)) {
-      fe = &fc->entries[fc->cache_idx];
+    if (fc->cached_entry != NULL && tuple_equal(&tuple, &fc->cache_tuple)) {
+      fe = fc->cached_entry;
       update_fc(fe, m);
       check(fc);
       continue;
     }
 
-    int ret = rte_hash_lookup(fc->flow_table, &tuple);
-
     fe = hash_table_look_up(fc->ht, tuple);
 
-
-    if (ret < 0) {
-      assert(fe == NULL);
-      ret = rte_hash_add_key(fc->flow_table, &tuple);
-      assert(ret >= 0);
+    if (fe == NULL) {
       struct flow_counter_entry* temp =
           malloc(sizeof(struct flow_counter_entry));
       assert(temp != NULL);
       hash_table_insert(fc->ht, tuple, temp);
-
-      fe = &fc->entries[ret];
+      fe = temp;
       fe->byte_cnt = 0;
       fe->pkt_cnt = 0;
       fe->tuple = tuple;
-
       TAILQ_INSERT_TAIL(&fc->flow_list, fe, tailq);
     } else {
-      fe = &fc->entries[ret];
-
       TAILQ_REMOVE(&fc->flow_list, fe, tailq);
       TAILQ_INSERT_TAIL(&fc->flow_list, fe, tailq);
     }
-    fc->cache_idx = ret;
     fc->cache_tuple = tuple;
+    fc->cached_entry = fe;
+
     update_fc(fe, m);
     check(fc);
   }

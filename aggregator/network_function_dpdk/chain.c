@@ -52,26 +52,49 @@ struct chain {
   struct nat *nat;
   struct router *route;
   struct aggregator *agg;
+  struct rte_hash *flow_table;
+  struct ipv4_5tuple cached_tuple;
+  bool have_cache;
+  char *data[MAX_NAT_FLOW_NUM];
 };
 
 struct chain * chain_create(){
+  
   struct chain *c =
-      (struct chain *)rte_malloc("chain", sizeof(struct chain), 0);
-  c->nat = nat_create();
-  c->fc = flow_counter_create();
-  c->route = router_create();
-  c->fw = firewall_create();
+      (struct chain *)rte_zmalloc("chain", sizeof(struct chain), 0);
+  if (CONFIG.ablation) {
+    struct rte_hash_parameters param = {.entries = MAX_NAT_FLOW_NUM,
+                                        .hash_func = rte_hash_crc,
+                                        .key_len = sizeof(struct ipv4_5tuple),
+                                        .socket_id = rte_socket_id(),
+                                        .hash_func_init_val = 0,
+                                        .name = "chain_flow_table"};
+
+    c->flow_table = rte_hash_create(&param);
+    assert(c->flow_table != NULL);
+  } else {
+    c->nat = nat_create();
+    c->fc = flow_counter_create();
+    c->route = router_create();
+    c->fw = firewall_create();
+  }
+  c->have_cache = false;
   c->agg = aggregator_create();
 
   return c;
 }
 
 void chain_free(struct chain* c){
+  if (CONFIG.ablation) {
+    rte_hash_free(c->flow_table);
+  } else {
     nat_free(c->nat);
     firewall_free(c->fw);
     router_free(c->route);
     flow_counter_free(c->fc);
-    rte_free(c);
+  }
+
+  rte_free(c);
 }
 
 static void replenish_tx_mbuf(struct thread_context *ctx) {
@@ -225,6 +248,59 @@ static void echo_back(struct rte_mbuf **rx_pkts, uint16_t nb_pkt) {
     memcpy(&eth->s_addr, &tmp, sizeof(struct rte_ether_addr));
   }
 }
+static struct ipv4_5tuple extract_tuple_from_udp(struct rte_mbuf *m) {
+  struct ipv4_5tuple tuple;
+  struct rte_udp_hdr *udp;
+  struct rte_ipv4_hdr *ipv4;
+  udp = rte_pktmbuf_mtod_offset(
+      m, struct rte_udp_hdr *,
+      sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
+  ipv4 = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr *,
+                                 sizeof(struct rte_ether_hdr));
+  tuple.ip_src = ipv4->src_addr;
+  tuple.ip_dst = ipv4->dst_addr;
+  tuple.port_dst = udp->dst_port;
+  tuple.port_src = udp->src_port;
+  tuple.proto = ipv4->next_proto_id;
+  return tuple;
+}
+
+static void ablation_process_burst(struct chain *chain, struct rte_mbuf **mbuf,
+                                   int len) {
+  for (int i = 0; i < len; i++) {
+    struct rte_mbuf *m = mbuf[i];
+
+    struct ipv4_5tuple tuple = extract_tuple_from_udp(m);
+
+    if (CONFIG.access_byte_per_packet > 0) {
+      // memory access test
+      int ret = rte_hash_lookup(chain->flow_table, &tuple);
+
+      if (ret == -1) {
+        ret = rte_hash_add_key(chain->flow_table, &tuple);
+        assert(ret >= 0);
+        chain->data[ret] =
+            (char *)malloc(sizeof(char) * CONFIG.access_byte_per_packet);
+        assert(chain->data[ret] != NULL);
+      }
+      char *p = chain->data[ret];
+      for (int i = 0; i < CONFIG.access_byte_per_packet; i++) {
+        char c = p[i];
+        c++;
+        p[i] = c;
+      }
+
+    } else {
+      if (chain->have_cache && tuple_equal(&tuple, &chain->cached_tuple)) {
+        // Hit
+      } else {
+        // Miss penalty here
+        chain->have_cache = true;
+        chain->cached_tuple = tuple;
+      }
+    }
+  }
+}
 
 static void chain_receiver(thread_context_t *ctx) {
   int lcore_id = rte_lcore_id();
@@ -270,14 +346,18 @@ static void chain_receiver(thread_context_t *ctx) {
     for (int i = 0; i < ret; i++) {
       total_byte_cnt += ctx->rx_pkts[i]->data_len;
     }
-
-    for (int i = 0; i < 1; i++) {
-      nat_process_packet_burst(chain->nat, ctx->rx_pkts, ret);
-      firewall_process_packet_burst(chain->fw, ctx->rx_pkts, ret);
-      flow_counter_process_packet_burst(chain->fc, ctx->rx_pkts, ret);
-      router_process_burst(chain->route, ctx->rx_pkts, ret);
+    if (!CONFIG.ablation) {
+      for (int i = 0; i < 1; i++) {
+        nat_process_packet_burst(chain->nat, ctx->rx_pkts, ret);
+        firewall_process_packet_burst(chain->fw, ctx->rx_pkts, ret);
+        flow_counter_process_packet_burst(chain->fc, ctx->rx_pkts, ret);
+        router_process_burst(chain->route, ctx->rx_pkts, ret);
+      }
+    } else {
+      assert(CONFIG.ablation == true);
+      ablation_process_burst(chain, ctx->rx_pkts, ret);
     }
-  
+
     pure_process_time += (rte_get_tsc_cycles() - pure_start);
 
     echo_back(ctx->rx_pkts, ret);

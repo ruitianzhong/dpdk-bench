@@ -151,8 +151,6 @@ void aggregator_free(struct aggregator *agg) {
   rte_free(agg);
 }
 
-RTE_INIT(init_aggregator_context) {}
-
 uint16_t aggregator_rx_burst(struct aggregator *agg, uint16_t port_id,
                              uint16_t queue_id, struct rte_mbuf **rx_pkts,
                              const uint16_t nb_pkts) {

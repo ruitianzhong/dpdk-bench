@@ -34,7 +34,6 @@ struct packet_mbuf {
   tailq;
 };
 
-
 TAILQ_HEAD(packet_head, packet_mbuf);
 TAILQ_HEAD(flow_entry_head, flow_entry);
 
@@ -121,6 +120,9 @@ struct config {
   uint32_t slf;
   bool enable_aggregate;
   int sender_throughput;
+  bool ablation;
+  int access_byte_per_packet;
+  int miss_penalty_cycle;
 };
 extern struct config CONFIG;
 

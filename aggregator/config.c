@@ -6,6 +6,9 @@ struct config CONFIG = {
     .slf = 1,
     .enable_aggregate = 0,
     .sender_throughput = -1,
+    .ablation = false,
+    .access_byte_per_packet = false,
+    .miss_penalty_cycle = 0,
 };
 
 static void init_app(char *app_name) {

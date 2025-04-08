@@ -1,4 +1,17 @@
 #include <rte_acl.h>
+#include <rte_debug.h>
+#include <rte_eal.h>
+#include <rte_ethdev.h>
+#include <rte_ether.h>
+#include <rte_hash.h>
+#include <rte_hash_crc.h>
+#include <rte_ip.h>
+#include <rte_launch.h>
+#include <rte_lcore.h>
+#include <rte_memory.h>
+#include <rte_mempool.h>
+#include <rte_tcp.h>
+#include <rte_udp.h>
 #include <stdint.h>
 
 #include "aggregator.h"
@@ -72,15 +85,11 @@ struct flow_counter_entry {
 #define MAX_FLOW_NUM 65535
 TAILQ_HEAD(fc_flow_head, flow_counter_entry);
 struct flow_counter {
-  struct rte_hash *flow_table;
-
-  struct flow_counter_entry entries[MAX_FLOW_NUM];
-
   struct fc_flow_head flow_list;
 
   struct ipv4_5tuple cache_tuple;
 
-  int cache_idx;
+  struct flow_counter_entry *cached_entry;
 
   struct hash_table *ht;
 };
@@ -119,16 +128,14 @@ struct wan2lan_entry {
 };
 
 struct nat {
-  struct rte_hash *lan2wan;
   struct rte_hash *wan2lan;
-  struct lan2wan_entry l2w_entries[MAX_NAT_FLOW_NUM];
   struct wan2lan_entry w2l_entries[MAX_NAT_FLOW_NUM];
   struct nat_flow_entry flow_entries[MAX_NAT_FLOW_NUM];
   struct nat_flow_entry_head used_list;
   struct nat_flow_entry_head free_list;
   uint64_t last_check_time_sec;
   struct ipv4_5tuple cache_tuple;
-  int cache_idx;
+  struct lan2wan_entry * cached_entry;
   struct hash_table *ht_lan2wan;
 };
 
