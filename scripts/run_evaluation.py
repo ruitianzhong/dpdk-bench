@@ -2,9 +2,9 @@
 
 import subprocess
 import re
-import matplotlib
 from matplotlib import pyplot as plt
-from matplotlib.ticker import MultipleLocator
+from run_motivation import write_json
+import argparse
 
 def run_back2back(app_name, gbps, enable_aggregator):
     assert (1 <= gbps <= 40)
@@ -108,7 +108,7 @@ def generate_back2back_figure():
     pass
 
 
-def main():
+def do_evaluation():
     print(run_back2back("chain", 25, True))
     # print(run_back2back("chain", 25, True))
 
@@ -125,6 +125,11 @@ def main():
     generate_latency_figure(with_agg_results, without_agg_results)
     generate_cycle_figure(with_agg_results, without_agg_results)
 
+    write_json("eval_with_agg.json", with_agg_results)
+    write_json("eval_without_agg.json", without_agg_results)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+
+    args = parser.parse_args()
+    do_evaluation()
