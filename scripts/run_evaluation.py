@@ -2,9 +2,13 @@
 
 import subprocess
 import re
+import matplotlib
+#  Avoid warning here
+matplotlib.use('Agg')
+
 from matplotlib import pyplot as plt
-from run_motivation import write_json
 import argparse
+from util import write_json, FIG_PATH, JSON_PATH
 
 
 def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cycle=0, access_byte_per_packet=0):
@@ -25,7 +29,7 @@ def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cy
 
     print(cmdline)
     cmdline = cmdline.split()
-    repeat = 1
+    repeat = 3
     xput = 0.0
     latency = 0.0
     cycle = 0.0
@@ -82,7 +86,7 @@ def print_figure(x, y1, y1_label, y2, y2_label, figname, xlabel, ylabel, filenam
     plt.scatter(x, y2, c='blue', s=30, marker='*', label=y2_label)
 
     plt.legend()
-    plt.savefig(filename)
+    plt.savefig(FIG_PATH+filename)
     print(f'Saving {filename}')
     plt.close()
 
@@ -152,14 +156,14 @@ def do_miss_penalty_ablation():
     print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
                  'Miss Penalty (cycle)', 'Throughput (Gbps)', prefix+'_throughput.png')
 
-    write_json(prefix+'_with_agg.json', with_agg)
-    write_json(prefix+'_without_agg.json', without_agg)
+    write_json(JSON_PATH+prefix+'_with_agg.json', with_agg)
+    write_json(JSON_PATH+prefix+'_without_agg.json', without_agg)
 
 
 def do_cache_ablation():
     with_agg = []
     without_agg = []
-    x = range(32, 1024, 32)
+    x = range(0, 1000+1, 100)
     for access_mem_size in x:
        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
                            enable_ablation=True, access_byte_per_packet=access_mem_size)
@@ -191,8 +195,8 @@ def do_cache_ablation():
     print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
                  x_axis_name, 'Throughput (Gbps)', prefix+'_throughput.png')
 
-    write_json(prefix+'_with_agg.json', with_agg)
-    write_json(prefix+'_without_agg.json', without_agg)
+    write_json(JSON_PATH+prefix+'_with_agg.json', with_agg)
+    write_json(JSON_PATH+prefix+'_without_agg.json', without_agg)
 
 
 def do_ablation():
@@ -207,7 +211,7 @@ def do_evaluation():
     with_agg_results = []
     without_agg_results = []
 
-    for i in range(1, 30):
+    for i in range(1, 34):
        result = run_back2back("chain", i, True)
        with_agg_results.append((i, result))
        result = run_back2back("chain", i, False)
@@ -217,8 +221,8 @@ def do_evaluation():
     generate_latency_figure(with_agg_results, without_agg_results)
     generate_cycle_figure(with_agg_results, without_agg_results)
 
-    write_json("eval_with_agg.json", with_agg_results)
-    write_json("eval_without_agg.json", without_agg_results)
+    write_json(JSON_PATH+"eval_with_agg.json", with_agg_results)
+    write_json(JSON_PATH+"eval_without_agg.json", without_agg_results)
 
 
 if __name__ == "__main__":
