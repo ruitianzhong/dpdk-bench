@@ -123,6 +123,8 @@ struct config {
   bool ablation;
   int access_byte_per_packet;
   int miss_penalty_cycle;
+  uint64_t buffer_time_us;
+  uint64_t flow_max_burst;
 };
 extern struct config CONFIG;
 

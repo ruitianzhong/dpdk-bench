@@ -117,10 +117,10 @@ struct aggregator *aggregator_create() {
   agg->entries = fe;
   TAILQ_INIT(&agg->ready_queue);
   TAILQ_INIT(&agg->flow_list);
-  agg->flow_burst_max = 3;
+  agg->flow_burst_max = CONFIG.flow_max_burst;
   agg->batch_cnt = 0;
   agg->batch_total = 0;
-  agg->buffer_time_us = 16;
+  agg->buffer_time_us = CONFIG.buffer_time_us;
 
   agg->pool = packet_mbuf_mempool_create();
   return agg;

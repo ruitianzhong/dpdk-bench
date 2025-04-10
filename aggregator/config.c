@@ -9,6 +9,8 @@ struct config CONFIG = {
     .ablation = false,
     .access_byte_per_packet = false,
     .miss_penalty_cycle = 0,
+    .flow_max_burst = 3,
+    .buffer_time_us = 16,
 };
 
 static void init_app(char *app_name) {
@@ -82,7 +84,7 @@ void parse_args(int argc, char **argv) {
       int gbps = atoi(argv[i + 1]);
       assert(gbps >= 1 && gbps <= 40);
       CONFIG.sender_throughput = gbps;
-      printf("targeted sender throughput will be %d Gbps\n",gbps);
+      printf("targeted sender throughput will be %d Gbps\n", gbps);
       i += 2;
 
     } else if (strcmp(argv[i], "--access-byte-per-packet") == 0) {
@@ -100,7 +102,7 @@ void parse_args(int argc, char **argv) {
       CONFIG.miss_penalty_cycle = atoi(argv[i + 1]);
       assert(CONFIG.miss_penalty_cycle >= 0);
       i += 2;
-    }else if (strcmp(argv[i], "--ablation") == 0) {
+    } else if (strcmp(argv[i], "--ablation") == 0) {
       if (i + 1 >= argc) {
         rte_exit(EXIT_FAILURE, "not enough argument");
       }
@@ -110,6 +112,22 @@ void parse_args(int argc, char **argv) {
       } else {
         CONFIG.ablation = false;
       }
+      i += 2;
+    } else if (strcmp(argv[i], "--max-batch") == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument");
+      }
+      CONFIG.flow_max_burst = atoi(argv[i + 1]);
+      assert(CONFIG.flow_max_burst > 0 && CONFIG.flow_max_burst <= 32);
+      printf("max burst:%ld \n", CONFIG.flow_max_burst);
+      i += 2;
+    } else if (strcmp(argv[i], "--buffer-time") == 0) {
+      if (i + 1 >= argc) {
+        rte_exit(EXIT_FAILURE, "not enough argument");
+      }
+      CONFIG.buffer_time_us = atoi(argv[i + 1]);
+      printf("buffer time is %ld\n", CONFIG.buffer_time_us);
+      assert(CONFIG.buffer_time_us < 200);
       i += 2;
     } else {
       rte_exit(EXIT_FAILURE, "unrecognized option: %s\n", argv[i]);

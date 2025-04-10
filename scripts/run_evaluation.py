@@ -1,17 +1,16 @@
 #! /bin/python
 
-import subprocess
-import re
 import matplotlib
+import re
+import subprocess
+from matplotlib import pyplot as plt
+from util import write_json, FIG_PATH, JSON_PATH
+import argparse
 #  Avoid warning here
 matplotlib.use('Agg')
 
-from matplotlib import pyplot as plt
-import argparse
-from util import write_json, FIG_PATH, JSON_PATH
 
-
-def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cycle=0, access_byte_per_packet=0):
+def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cycle=0, access_byte_per_packet=0, max_batch=3, buffer_time_us=16):
     # reasonable offered load
     assert (1 <= gbps <= 40)
 
@@ -25,7 +24,9 @@ def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cy
         f" --gbps {str(gbps)} " \
         f" --ablation {1 if enable_ablation else 0} "   \
         f" --delay-cycle {delay_cycle} "    \
-        f" --access-byte-per-packet {access_byte_per_packet} "
+        f" --access-byte-per-packet {access_byte_per_packet} "  \
+        f" --max-batch {max_batch} " \
+        f" --buffer-time {buffer_time_us} "
 
     print(cmdline)
     cmdline = cmdline.split()
@@ -91,6 +92,28 @@ def print_figure(x, y1, y1_label, y2, y2_label, figname, xlabel, ylabel, filenam
     plt.close()
 
 
+def print_multiple_figure(x, y, y_label,  figname, xlabel, ylabel, filename):
+    color = ['r', 'b', 'g']
+    shape = ['x', '*', ',']
+    plt.figure(figsize=(8, 4))
+    plt.minorticks_on()
+    # Setup Grid
+    plt.grid(True, which="major", linestyle="--", color="gray", linewidth=0.75)
+    plt.grid(True, which="minor", linestyle=":",
+             color="lightgray", linewidth=0.7)
+    plt.title(figname)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    for idx, _ in enumerate(y):
+        plt.scatter(x, y[idx], c=color[idx],
+                    label=y_label[idx], marker=shape[idx])
+
+    plt.legend()
+    plt.savefig(FIG_PATH+filename)
+    print(f'Saving {filename}')
+    plt.close()
+
+
 def generate_throughput_figure(with_agg_results, without_agg_results):
     x = [result[0] for result in with_agg_results]
     with_agg_y = [result[1]['throughput'] for result in with_agg_results]
@@ -125,7 +148,7 @@ def do_preparation():
 def do_miss_penalty_ablation():
     with_agg = []
     without_agg = []
-    for miss_penalty_cycle in range(100, 1700, 100):
+    for miss_penalty_cycle in range(0, 1700, 100):
        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
                            enable_ablation=True, delay_cycle=miss_penalty_cycle)
 
@@ -158,6 +181,42 @@ def do_miss_penalty_ablation():
 
     write_json(JSON_PATH+prefix+'_with_agg.json', with_agg)
     write_json(JSON_PATH+prefix+'_without_agg.json', without_agg)
+
+
+def do_burst_time_ablation():
+    x = range(25, 34)
+    buffer_time = [16, 32, 48]
+    results = []
+    for _ in range(len(buffer_time)):
+        results.append([])
+
+    for gbps in x:
+        for idx, t in enumerate(buffer_time):
+            ret = run_back2back(app_name="chain", gbps=gbps, enable_aggregator=True,
+                                enable_ablation=False, access_byte_per_packet=0, max_batch=32, buffer_time_us=t)
+            results[idx].append(ret)
+    print(results)
+    write_json("buffer_time.json", results)
+
+    y_label = [f"buffer time {t} us" for t in buffer_time]
+    y_latency = []
+    y_throughput = []
+    y_cycle = []
+
+    for idx in range(len(buffer_time)):
+        y_latency.append([m['latency'] for m in results[idx]])
+        y_cycle.append([m['cycle'] for m in results[idx]])
+        y_throughput.append([m['throughput'] for m in results[idx]])
+
+    PREFIX = "buffer_time"
+    x_axis = "Offered Load (Gbps)"
+
+    print_multiple_figure(x, y_latency, y_label, "", x_axis,
+                          "Latency (us)",  PREFIX+"_latency.png")
+    print_multiple_figure(x, y_throughput, y_label, "", x_axis,
+                          "Throughput (Gbps)",  PREFIX+"_throughput.png")
+    print_multiple_figure(x, y_cycle, y_label, "", x_axis,
+                          "Processing Time Per Packet (cycle)",  PREFIX+"_cycle.png")
 
 
 def do_cache_ablation():
@@ -231,6 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("--prepare", action="store_true", default=False)
     parser.add_argument("--run", action="store_true", default=False)
     parser.add_argument("--ablation", action="store_true", default=False)
+    parser.add_argument("--buffer-time", action="store_true", default=False)
     args = parser.parse_args()
     if args.prepare:
         do_preparation()
@@ -238,3 +298,5 @@ if __name__ == "__main__":
         do_evaluation()
     if args.ablation:
         do_ablation()
+    if args.buffer_time:
+        do_burst_time_ablation()
