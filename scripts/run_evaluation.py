@@ -10,7 +10,7 @@ import argparse
 matplotlib.use('Agg')
 
 
-def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cycle=0, access_byte_per_packet=0, max_batch=3, buffer_time_us=16):
+def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cycle=0, access_byte_per_packet=0, max_batch=32, buffer_time_us=16):
     # reasonable offered load
     assert (1 <= gbps <= 40)
 
@@ -74,7 +74,7 @@ def run_back2back(app_name, gbps, enable_aggregator, enable_ablation=0, delay_cy
 
 def print_figure(x, y1, y1_label, y2, y2_label, figname, xlabel, ylabel, filename):
 
-    plt.figure(figsize=(6, 3.5))
+    plt.figure(figsize=(8, 4))
     plt.minorticks_on()
     # Setup Grid
     plt.grid(True, which="major", linestyle="--", color="gray", linewidth=0.75)
@@ -148,7 +148,8 @@ def do_preparation():
 def do_miss_penalty_ablation():
     with_agg = []
     without_agg = []
-    for miss_penalty_cycle in range(0, 1700, 100):
+    x = range(0, 1700, 100)
+    for miss_penalty_cycle in x:
        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
                            enable_ablation=True, delay_cycle=miss_penalty_cycle)
 
@@ -157,7 +158,6 @@ def do_miss_penalty_ablation():
                            enable_ablation=True, delay_cycle=miss_penalty_cycle)
        without_agg.append(ret)
 
-    x = range(100, 1700, 100)
     # cycle
     y1 = [e['cycle'] for e in with_agg]
     y2 = [e['cycle'] for e in without_agg]
