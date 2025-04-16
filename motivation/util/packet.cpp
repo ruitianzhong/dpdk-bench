@@ -24,12 +24,12 @@ eth *Packet::get_eth_hdr() {
   return (eth *)data;
 }
 // We use pcap because it's easy to read the packet through tools like Wireshark
-PacketsLoader::PacketsLoader(std::string &&filepath, uint64_t loop_back_time)
+PacketsLoader::PacketsLoader(std::string &&filepath, uint64_t max_packets)
     : _cur_idx(0),
       _total_packets(0),
       _total_bytes_count(0),
-      _loop_back_time(loop_back_time),
-      _current_epoch(0) {
+      _nb_max_packets(max_packets),
+      _nb_current_packets(0) {
   const char *path = filepath.c_str();
   char ebuf[PCAP_ERRBUF_SIZE];
   pcap_t *p = pcap_open_offline(path, ebuf);
@@ -63,14 +63,14 @@ PacketsLoader::PacketsLoader(std::string &&filepath, uint64_t loop_back_time)
 }
 
 Packet *PacketsLoader::get_next_packet() {
-  if (_current_epoch == _loop_back_time) {
+  if (_nb_current_packets == _nb_max_packets) {
     return nullptr;
   }
   Packet *p = _packets[_cur_idx];
   _cur_idx += 1;
   if (_cur_idx == _total_packets) {
     _cur_idx = 0;
-    _current_epoch += 1;
   }
+  _nb_current_packets += 1;
   return p;
 }

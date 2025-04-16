@@ -44,7 +44,7 @@
 */
 
 #define BURST_TX_DRAIN_US 10
-#define MAX_INFLIGHT_PACKET (256 * 1)
+#define MAX_INFLIGHT_PACKET (512 * 1)
 
 struct chain {
   struct firewall *fw;

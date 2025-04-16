@@ -198,7 +198,8 @@ int main(int argc, char const *argv[]) {
   uint64_t total_us = 0;
   uint64_t cnt = 0;
   // load the data before processing
-  PacketsLoader pl = PacketsLoader(std::string(CONFIG.filename), 10000);
+  PacketsLoader pl =
+      PacketsLoader(std::string(CONFIG.filename), 10000 * 16 * 600);
   std::cout << "NAT processing start" << std::endl;
   gettimeofday(&start_time, NULL);
   // the killer microsecond
