@@ -172,12 +172,16 @@ def do_miss_penalty_ablation():
 
     print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
                  'Miss Penalty (cycle)', 'Average Latency Per Packet (us)', prefix+'_latency.png')
+    print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
+                 'Miss Penalty (cycle)', 'Average Latency Per Packet (us)', prefix+'_latency.eps')
 
     y1 = [e['throughput'] for e in with_agg]
     y2 = [e['throughput'] for e in without_agg]
 
     print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
                  'Miss Penalty (cycle)', 'Throughput (Gbps)', prefix+'_throughput.png')
+    print_figure(x, y1, 'w/ aggregator', y2, 'w/o aggregator', '',
+                 'Miss Penalty (cycle)', 'Throughput (Gbps)', prefix+'_throughput.eps')
 
     write_json(JSON_PATH+prefix+'_with_agg.json', with_agg)
     write_json(JSON_PATH+prefix+'_without_agg.json', without_agg)
@@ -196,7 +200,7 @@ def do_burst_time_ablation():
                                 enable_ablation=False, access_byte_per_packet=0, max_batch=32, buffer_time_us=t)
             results[idx].append(ret)
     print(results)
-    write_json("buffer_time.json", results)
+    write_json(JSON_PATH+"buffer_time.json", results)
 
     y_label = [f"buffer time {t} us" for t in buffer_time]
     y_latency = []

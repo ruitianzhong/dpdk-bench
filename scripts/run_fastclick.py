@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
             for _ in range(repeat):
                ret = run_fastclick(slf=i, flow_num=flow_num,
-                                 group_count=cnts[idx])
+                                   group_count=cnts[idx])
                total += ret
 
             result.append(float(total)/float(repeat))

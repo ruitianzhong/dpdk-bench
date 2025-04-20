@@ -20,6 +20,7 @@ This script generate both the ACL file and synthetic flow stored in *.pcap
 firewall rules(ACL rules) similar to POM paper
 """
 
+
 def generate_random_str(randomlength=16):
     random_str = ''
     base_str = 'ABCDEFGHIGKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789'
@@ -27,6 +28,7 @@ def generate_random_str(randomlength=16):
     for i in range(randomlength):
         random_str += base_str[random.randint(0, length)]
     return random_str
+
 
 def generate_fw_rules(filename, src_ips, dst_ips):
     random.shuffle(dst_ips)
@@ -65,26 +67,27 @@ def get_random_ip_list(flow_size):
     for i in range(flow_size):
         done = False
         while not done:
-            a=random.randrange(1,255)
-            b=random.randrange(1,255)
-            c=random.randrange(1,255)
-            d=random.randrange(1,255)
+            a = random.randrange(1, 255)
+            b = random.randrange(1, 255)
+            c = random.randrange(1, 255)
+            d = random.randrange(1, 255)
             ip = str(a)+"."+str(b)+"."+str(c)+"."+str(d)
             if not dst_ip_list.__contains__(ip):
                 dst_ip_list.append(ip)
-                done= True
+                done = True
         done = False
         while not done:
-            a=random.randrange(1,255)
-            b=random.randrange(1,255)
-            c=random.randrange(1,255)
-            d=random.randrange(1,255)
+            a = random.randrange(1, 255)
+            b = random.randrange(1, 255)
+            c = random.randrange(1, 255)
+            d = random.randrange(1, 255)
             ip = str(a)+"."+str(b)+"."+str(c)+"."+str(d)
             if not dst_ip_list.__contains__(ip) and not src_ip_list.__contains__(ip):
                 src_ip_list.append(ip)
-                done= True
+                done = True
     assert (len(src_ip_list) == len(dst_ip_list))
     return (src_ip_list, dst_ip_list)
+
 
 def generate_packets(args):
     cnt = 0

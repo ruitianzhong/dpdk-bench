@@ -15,7 +15,7 @@ def run_motivation(enable_cache, slf, flow_num=10000, count=1):
     per_packet_ns = 0.0
     miss_percent = 0.0
     miss_cnt = 0.0
-    repeat = 1
+    repeat = 4
     total_packets = 0
     for _ in range(repeat):
         reuslt = subprocess.run(
@@ -30,9 +30,9 @@ def run_motivation(enable_cache, slf, flow_num=10000, count=1):
             if len(ret) == 1:
                 per_packet_ns += float(ret[0])
 
-            ret = re.findall(r'Total Packest handled: (\S+)',line)
+            ret = re.findall(r'Total Packest handled: (\S+)', line)
 
-            if len(ret)==1:
+            if len(ret) == 1:
                 total_packets = int(ret[0])
 
         lines = reuslt.stderr.split('\n')
@@ -48,8 +48,6 @@ def run_motivation(enable_cache, slf, flow_num=10000, count=1):
             if len(ret) == 1:
                 s = str(ret[0])
                 miss_cnt += float(s.replace(',', ''))
-                
-
 
     per_packet_ns /= repeat
     miss_percent /= repeat
@@ -81,11 +79,15 @@ def generate_fig(with_cached, without_cached, filename_prefix=''):
 
     print_figure(x, y1, "w/ cache", y2, "w/o cache", '', 'F',
                  'Average Processing Time Per Packet (ns)', filename_prefix+'per_packet.png')
+    print_figure(x, y1, "w/ cache", y2, "w/o cache", '', 'F',
+                 'Average Processing Time Per Packet (ns)', filename_prefix+'per_packet.eps')
 
     y1 = [e['miss_percent'] for e in with_cached]
     y2 = [e['miss_percent'] for e in without_cached]
     print_figure(x, y1, "w/ cache", y2, "w/o cache", '', 'F',
                  'L1-dcache Load Misses Rate (%)', filename_prefix+'miss_rate.png')
+    print_figure(x, y1, "w/ cache", y2, "w/o cache", '', 'F',
+                 'L1-dcache Load Misses Rate (%)', filename_prefix+'miss_rate.eps')
 
 
 def main():
@@ -116,23 +118,24 @@ def main():
         write_json(JSON_PATH+'motivation_with_cache.json', with_cache_result)
         write_json(JSON_PATH+'motivation_without_cache.json',
                    without_cache_result)
-        
-        flow_nums = [32, 128, 512, 1000]
-        cnts = [300, 75,19, 10]
 
-        for idx,flow_num in enumerate(flow_nums):
+        flow_nums = [32, 128, 512, 1000]
+        cnts = [300, 75, 19, 10]
+
+        for idx, flow_num in enumerate(flow_nums):
             with_cache_result = []
             without_cache_result = []
             for slf in range(1, 17):
-                ret = run_motivation(True, slf, flow_num=flow_num,count=cnts[idx])
+                ret = run_motivation(
+                    True, slf, flow_num=flow_num, count=cnts[idx])
                 with_cache_result.append(ret)
 
-                ret = run_motivation(False, slf, flow_num=flow_num,  count=cnts[idx])
+                ret = run_motivation(
+                    False, slf, flow_num=flow_num,  count=cnts[idx])
                 without_cache_result.append(ret)
 
             generate_fig(with_cached=with_cache_result,
                          without_cached=without_cache_result, filename_prefix="flow_num"+str(flow_num))
-
 
 
 if __name__ == "__main__":

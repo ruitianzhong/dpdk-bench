@@ -36,9 +36,10 @@ def generate_fw_rules(filename, src_ips, dst_ips):
         for ip in dst_ips:
             f.write(ip+"/32\n")
 
-def generate_fastclick_fw_rules(filename,src_ips,dst_ips):
+
+def generate_fastclick_fw_rules(filename, src_ips, dst_ips):
     random.shuffle(dst_ips)
-    with open(filename,"w") as f:
+    with open(filename, "w") as f:
         for ip in dst_ips:
             f.write("allow dst net "+ip+"/32\n")
 
@@ -102,10 +103,10 @@ def generate_packets(args):
     optimized_pkt_list = [None] * total_size
     flows_list = [None] * args.flow_num
     src_ips, dst_ips = get_random_ip_list(args.flow_num)
-    generate_fw_rules("fw-testing-"+str(args.flow_num)+".rules", src_ips, dst_ips)
+    generate_fw_rules("fw-testing-"+str(args.flow_num) +
+                      ".rules", src_ips, dst_ips)
     generate_fastclick_fw_rules(
         "fw-fastclick-"+str(args.flow_num)+".rules", src_ips, dst_ips)
-
 
     for flow_idx in range(args.flow_num):
         src_ip = src_ips[flow_idx]
@@ -143,8 +144,8 @@ def generate_packets(args):
                 for _ in range(2):
                     optimized_pkt_list[idx] = flows_list[i+cnt]
                     idx += 1
-        cnt+= current_batch_size
-    
+        cnt += current_batch_size
+
     assert (cnt == args.flow_num)
 
     return (pkt_list, optimized_pkt_list)
