@@ -150,13 +150,13 @@ def do_miss_penalty_ablation():
     without_agg = []
     x = range(0, 1700, 100)
     for miss_penalty_cycle in x:
-       ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
-                           enable_ablation=True, delay_cycle=miss_penalty_cycle)
+        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
+                            enable_ablation=True, delay_cycle=miss_penalty_cycle)
 
-       with_agg.append(ret)
-       ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=False,
-                           enable_ablation=True, delay_cycle=miss_penalty_cycle)
-       without_agg.append(ret)
+        with_agg.append(ret)
+        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=False,
+                            enable_ablation=True, delay_cycle=miss_penalty_cycle)
+        without_agg.append(ret)
 
     # cycle
     y1 = [e['cycle'] for e in with_agg]
@@ -187,7 +187,7 @@ def do_miss_penalty_ablation():
     write_json(JSON_PATH+prefix+'_without_agg.json', without_agg)
 
 
-def do_burst_time_ablation():
+def do_buffer_time_ablation():
     x = range(25, 34)
     buffer_time = [16, 32, 48]
     results = []
@@ -228,13 +228,13 @@ def do_cache_ablation():
     without_agg = []
     x = range(0, 1000+1, 100)
     for access_mem_size in x:
-       ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
-                           enable_ablation=True, access_byte_per_packet=access_mem_size)
+        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=True,
+                            enable_ablation=True, access_byte_per_packet=access_mem_size)
 
-       with_agg.append(ret)
-       ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=False,
-                           enable_ablation=True, access_byte_per_packet=access_mem_size)
-       without_agg.append(ret)
+        with_agg.append(ret)
+        ret = run_back2back(app_name="chain", gbps=30, enable_aggregator=False,
+                            enable_ablation=True, access_byte_per_packet=access_mem_size)
+        without_agg.append(ret)
 
     # cycle
     y1 = [e['cycle'] for e in with_agg]
@@ -275,10 +275,10 @@ def do_evaluation():
     without_agg_results = []
 
     for i in range(1, 34):
-       result = run_back2back("chain", i, True)
-       with_agg_results.append((i, result))
-       result = run_back2back("chain", i, False)
-       without_agg_results.append((i, result))
+        result = run_back2back("chain", i, True)
+        with_agg_results.append((i, result))
+        result = run_back2back("chain", i, False)
+        without_agg_results.append((i, result))
 
     generate_throughput_figure(with_agg_results, without_agg_results)
     generate_latency_figure(with_agg_results, without_agg_results)
@@ -303,4 +303,4 @@ if __name__ == "__main__":
     if args.ablation:
         do_ablation()
     if args.buffer_time:
-        do_burst_time_ablation()
+        do_buffer_time_ablation()
