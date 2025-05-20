@@ -139,7 +139,7 @@ def generate_cycle_figure(with_agg_results, without_agg_results):
 
 
 def do_preparation():
-    cmdline = "./scripts/generate_testing_flow"
+    cmdline = "./scripts/generate_testing_flow.py"
     cmdline = cmdline.split()
     subprocess.run(cmdline, check=True)
     print("Preparation done!")

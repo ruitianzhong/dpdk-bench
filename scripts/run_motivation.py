@@ -10,6 +10,7 @@ def run_motivation(enable_cache, slf, flow_num=10000, count=1):
     filename = f"synthetic_slf{slf}_flow_num{flow_num}_count{count}_seed42.pcap"
 
     cmd = f"perf stat -e L1-dcache-load-misses,L1-dcache-load taskset -c 0 ./motivation/nat --enable-cache {1 if enable_cache else 0} --pcap {filename}"
+    print("running command: "+cmd)
     cmd = cmd.split()
 
     per_packet_ns = 0.0
@@ -62,7 +63,7 @@ def run_motivation(enable_cache, slf, flow_num=10000, count=1):
     return result
 
 
-def run_prepare(flow_num=512, group_count=19):
+def run_prepare(flow_num=512, group_count=1):
     for slf in range(1, 17):
         cmd = f"./scripts/generate_synthetic_flow.py --slf {slf} --slf-group-count {group_count} --flow-num {flow_num}"
         print(cmd)
@@ -99,7 +100,10 @@ def main():
     args = parser.parse_args()
     print(args.prepare)
     if args.prepare:
-        run_prepare()
+        flow_nums = [32, 1000, 10000]
+        cnts = [300, 10, 1]
+        for idx, flow_num in enumerate(flow_nums):
+            run_prepare(flow_num=flow_num, group_count=cnts[idx])
 
     if args.run:
         # run_motivation(False, 1)
@@ -119,8 +123,10 @@ def main():
         write_json(JSON_PATH+'motivation_without_cache.json',
                    without_cache_result)
 
-        flow_nums = [32, 128, 512, 1000]
-        cnts = [300, 75, 19, 10]
+        # flow_nums = [32, 128, 512, 1000]
+        # cnts = [300, 75, 19, 10]
+        flow_nums = [32, 1000, 10000]
+        cnts = [300, 10, 1]
 
         for idx, flow_num in enumerate(flow_nums):
             with_cache_result = []
