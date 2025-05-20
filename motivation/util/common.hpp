@@ -95,18 +95,19 @@ class PacketsLoader {
   uint64_t _cur_idx;
   uint64_t _total_bytes_count;
   uint64_t _prev;
-  uint64_t _loop_back_time;
-  uint64_t _current_epoch;
+  uint64_t _nb_max_packets;
+  uint64_t _nb_current_packets;
   /* data */
  public:
-  explicit PacketsLoader(std::string &&filepath, uint64_t loop_back_time = 1);
+  explicit PacketsLoader(std::string &&filepath, uint64_t max_packets);
 
   // PacketsLoader(PacketsLoader &) = delete;
   // return nullptr if there is no more packet
   Packet *get_next_packet();
 
   uint64_t get_total_packets() const {
-    return _total_packets * _loop_back_time;
+    assert(_nb_current_packets == _nb_max_packets);
+    return _nb_current_packets;
   }
 };
 // #define NF_DEBUG

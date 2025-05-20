@@ -8,3 +8,5 @@ build
 *.rules
 *.data
 *.data.old
+__pycache__
+result
