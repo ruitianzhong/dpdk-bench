@@ -80,6 +80,7 @@ Generate packets trace for motivation and evaluation:
 All generated figures are under `result/fig`.
 
 | Fig in Thesis | File Name |
+| ----------- | ----------- |
 | Fig 3-2 | flow_num10000per_packet.png |
 | Fig 3-3 | flow_num10000miss_rate.png |
 | Fig 3-4 | flow_num10000per_packet.png |
@@ -96,6 +97,7 @@ sudo ./scripts/run_evaluation.py --run --buffer-time
 All generated figures are under `result/fig`.
 
 | Fig in Thesis | File Name |
+| ----------- | ----------- |
 | Fig 4-3 | throughput.png |
 | Fig 4-4 | latency.png |
 | Fig 4-5 | cycle.png |
