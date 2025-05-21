@@ -62,9 +62,9 @@ make -C ./aggregator
 
 Generate packets trace for motivation and evaluation:
 ```bash
-# Machine time: ~40 min (can be parallelized)
+# machine time: ~40 min (can be parallelized to speed up)
 ./scripts/run_motivation.py --prepare
-# Machine time: ~6 min
+# machine time: ~6 min
 ./scripts/run_evaluation.py --prepare
 ```
 
@@ -73,16 +73,35 @@ Generate packets trace for motivation and evaluation:
 ### Results for motivation
 
 ```bash
-# Machine time: ~ 32 minutes
+# machine time: ~ 35 minutes
 ./scripts/run_motivation.py --run
 ```
+
+All generated figures are under `result/fig`.
+
+| Fig in Thesis | File Name |
+| Fig 3-2 | flow_num10000per_packet.png |
+| Fig 3-3 | flow_num10000miss_rate.png |
+| Fig 3-4 | flow_num10000per_packet.png |
+| Fig 3-5 | flow_num1000miss_rate.png |
+| Fig 3-6 | flow_num32per_packet.png |
 
 ### Results for evaluation
 
 ```bash
-# Machine time: ~20 minutes
+# machine time: ~17 minutes
 sudo ./scripts/run_evaluation.py --run --buffer-time
 ```
+
+All generated figures are under `result/fig`.
+
+| Fig in Thesis | File Name |
+| Fig 4-3 | throughput.png |
+| Fig 4-4 | latency.png |
+| Fig 4-5 | cycle.png |
+| Fig 4-6 | buffer_time_throughput.png |
+| Fig 4-7 | buffer_time_latency.png |
+| Fig 4-8 | buffer_time_cycle.png |
 
 ### Clean up all the results and traces
 
