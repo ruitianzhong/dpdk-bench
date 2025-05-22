@@ -26,9 +26,9 @@ System configuration:
 # for perf
 cat /proc/sys/kernel/perf_event_paranoid
 echo "-1" | sudo  tee /proc/sys/kernel/perf_event_paranoid
-# disable turbo boost
+# enable turbo boost
 cat /sys/devices/system/cpu/intel_pstate/no_turbo
-echo "1" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
+echo "0" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
 
 # Two NUMA node here
 # Hugepage setup
