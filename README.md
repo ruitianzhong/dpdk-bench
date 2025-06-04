@@ -12,7 +12,6 @@ Testbed Overview:
 
 ![testbed overview](./platform_illustrate.png)
 
-
 Install Dependencies:
 
 ```bash
@@ -40,7 +39,6 @@ mount -t hugetlbfs pagesize=1GB /mnt/huge
 
 All the programs are developed and tested with _DPDK 21.05_.
 
-
 DPDK setup(Note that you must replaced the `0000:82:00.1` and `0000:04:00.1` with your configuration.): 
 
 ```bash
@@ -65,6 +63,7 @@ make -C ./aggregator
 ## Generate packets trace and configuration file for firewall
 
 Generate packets trace for motivation and evaluation:
+
 ```bash
 # machine time: ~40 min (can be parallelized to speed up)
 ./scripts/run_motivation.py --prepare
@@ -116,4 +115,9 @@ All generated figures are under `result/fig`.
 rm -rf ./result
 # remove traces 
 rm -rf *.pcap
+# To restore the original configuration
+sudo dpdk-devbind.py -u 0000:04:00.1
+sudo dpdk-devbind.py -u 0000:82:00.1
+sudo dpdk-devbind.py -b i40e 0000:04:00.1
+sudo dpdk-devbind.py -b i40e 0000:82:00.1
 ```
