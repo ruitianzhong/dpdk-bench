@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository is for artifact evaluation(i.e., 软硬件验收 in Chinese) of final year project(FYP) in Xidian University.
+This repository is for artifact evaluation (i.e., 软硬件验收 in Chinese) of final year project (FYP) in Xidian University.
 
 [Section 2](#setup-environment) contains necessary steps to set up the testbed to reproduce the result. [Section 3](#generate-packets-trace-and-configuration-file-for-firewall) gives instruction to generate the trace used in the evaluation. [Section 4](#reproducing-the-results) provides detailed instruction to reproduce the result in bachelor thesis.
 
@@ -39,7 +39,7 @@ mount -t hugetlbfs pagesize=1GB /mnt/huge
 
 All the programs are developed and tested with _DPDK 21.05_.
 
-DPDK setup(Note that you must replaced the `0000:82:00.1` and `0000:04:00.1` with your configuration.): 
+DPDK setup (Note that you must replaced the `0000:82:00.1` and `0000:04:00.1` with your configuration.): 
 
 ```bash
 # add the NIC used in experiment
